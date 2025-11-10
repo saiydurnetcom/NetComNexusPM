@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { authService } from '../lib/auth';
+import { apiClient } from '../lib/api';
 import { User } from '../types';
 
 export const useAuth = () => {
@@ -18,6 +19,10 @@ export const useAuth = () => {
           lastName: session.user.user_metadata?.lastName || '',
           createdAt: session.user.created_at,
         });
+        apiClient.setToken(session.access_token ?? null);
+      }
+      if (!session?.user) {
+        apiClient.setToken(null);
       }
       setIsLoading(false);
     });
@@ -34,8 +39,10 @@ export const useAuth = () => {
           lastName: session.user.user_metadata?.lastName || '',
           createdAt: session.user.created_at,
         });
+        apiClient.setToken(session.access_token ?? null);
       } else {
         setUser(null);
+        apiClient.setToken(null);
       }
     });
 
@@ -46,6 +53,7 @@ export const useAuth = () => {
     setIsLoading(true);
     try {
       const response = await authService.login(email, password);
+      apiClient.setToken(response.token || null);
       setUser(response.user);
       return response;
     } finally {
@@ -62,6 +70,7 @@ export const useAuth = () => {
     setIsLoading(true);
     try {
       const response = await authService.register(data);
+      apiClient.setToken(response.token || null);
       setUser(response.user);
       return response;
     } finally {
@@ -71,6 +80,7 @@ export const useAuth = () => {
 
   const logout = async () => {
     await authService.logout();
+    apiClient.setToken(null);
     setUser(null);
   };
 
