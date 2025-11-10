@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -22,8 +23,17 @@ export default function MeetingProcessor() {
   const { toast } = useToast();
 
   useEffect(() => {
-    fetchProjects();
-    fetchSuggestions();
+    const loadData = async () => {
+      try {
+        await fetchProjects();
+        await fetchSuggestions();
+      } catch (err) {
+        console.error('Error loading data:', err);
+        // Don't show error toast here as it might be a database connection issue
+        // The component should still render
+      }
+    };
+    loadData();
   }, [fetchProjects, fetchSuggestions]);
 
   const handleProcessMeeting = async () => {
@@ -108,7 +118,7 @@ export default function MeetingProcessor() {
     <div className="min-h-screen bg-gray-50">
       <Navigation />
       <div className="container mx-auto p-6 space-y-6">
-      <Card>
+        <Card>
         <CardHeader>
           <CardTitle>Process Meeting Notes</CardTitle>
           <CardDescription>
@@ -118,13 +128,13 @@ export default function MeetingProcessor() {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="title">Meeting Title</Label>
-            <input
+            <Input
               id="title"
               type="text"
               placeholder="Enter meeting title"
               value={meetingTitle}
               onChange={(e) => setMeetingTitle(e.target.value)}
-              className="w-full p-2 border rounded-md"
+              required
             />
           </div>
 
@@ -150,12 +160,12 @@ export default function MeetingProcessor() {
 
           <div className="space-y-2">
             <Label htmlFor="date">Meeting Date</Label>
-            <input
+            <Input
               id="date"
               type="date"
               value={meetingDate}
               onChange={(e) => setMeetingDate(e.target.value)}
-              className="w-full p-2 border rounded-md"
+              required
             />
           </div>
 
