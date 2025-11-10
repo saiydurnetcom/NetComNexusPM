@@ -71,11 +71,20 @@ pnpm run dev
 
 ## Security Notes
 
-⚠️ **Important**: Never commit your `.env` file to version control!
+⚠️ **CRITICAL SECURITY RULES**:
 
-- The `.env` file should be in your `.gitignore`
-- API keys are exposed in the frontend (VITE_ prefix makes them public)
-- For production, consider using a backend proxy to keep API keys secure
+1. **NEVER hardcode API keys in source files!**
+   - The code uses environment variables (`VITE_AI_API_KEY`)
+   - Never add API keys directly to `src/lib/deepseek.ts` or any other code file
+
+2. **Never commit `.env` file to version control!**
+   - `.env` should be in `.gitignore` (already configured)
+   - Use `.env.example` as a template (without real keys)
+
+3. **For Production (Vercel)**:
+   - Use Vercel environment variables (not `.env` file)
+   - API keys are exposed in frontend code (VITE_ prefix makes them public)
+   - Consider using a backend proxy for better security
 
 ## Troubleshooting
 

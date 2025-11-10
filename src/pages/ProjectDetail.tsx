@@ -5,13 +5,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import Navigation from '@/components/Navigation';
 import { useTasks } from '@/hooks/useTasks';
 import { useProjects } from '@/hooks/useProjects';
 import { useAuth } from '@/hooks/useAuth';
 import { useTimeTracking } from '@/hooks/useTimeTracking';
 import { useToast } from '@/components/ui/use-toast';
 import { Task, Project } from '@/types';
-import { ArrowLeft, Play, Clock } from 'lucide-react';
+import { Play, Clock } from 'lucide-react';
 
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
@@ -119,17 +120,10 @@ export default function ProjectDetail() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <Button
-        variant="ghost"
-        onClick={() => navigate('/projects')}
-        className="mb-4"
-      >
-        <ArrowLeft className="h-4 w-4 mr-2" />
-        Back to Projects
-      </Button>
-
-      <Card>
+    <div className="min-h-screen bg-gray-50">
+      <Navigation />
+      <div className="container mx-auto p-6 space-y-6">
+        <Card>
         <CardHeader>
           <CardTitle>{currentProject.name}</CardTitle>
           <CardDescription>{currentProject.description}</CardDescription>
@@ -177,7 +171,13 @@ export default function ProjectDetail() {
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between">
                     <div className="space-y-2 flex-1">
-                      <h4 className="font-semibold">{task.title}</h4>
+                      <Button
+                        variant="link"
+                        className="p-0 h-auto font-semibold text-base"
+                        onClick={() => navigate(`/tasks/${task.id}`)}
+                      >
+                        {task.title}
+                      </Button>
                       {task.description && (
                         <p className="text-sm text-muted-foreground">
                           {task.description}
@@ -237,6 +237,7 @@ export default function ProjectDetail() {
           )}
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

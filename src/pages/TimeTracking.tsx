@@ -7,11 +7,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import Navigation from '@/components/Navigation';
 import { useTimeTracking } from '@/hooks/useTimeTracking';
 import { useTasks } from '@/hooks/useTasks';
 import { useProjects } from '@/hooks/useProjects';
 import { useToast } from '@/components/ui/use-toast';
-import { Clock, Play, Square, Calendar, BarChart3, Plus, ArrowLeft } from 'lucide-react';
+import { Clock, Play, Square, Calendar, BarChart3, Plus } from 'lucide-react';
 
 export default function TimeTracking() {
   const navigate = useNavigate();
@@ -174,17 +175,10 @@ export default function TimeTracking() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen bg-gray-50">
+      <Navigation />
+      <div className="max-w-6xl mx-auto p-6">
         <div className="mb-8">
-          <Button
-            variant="ghost"
-            onClick={() => navigate('/dashboard')}
-            className="mb-4"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Dashboard
-          </Button>
           <h1 className="text-3xl font-bold text-gray-900">Time Tracking</h1>
           <p className="text-gray-600">Track and manage your time entries</p>
         </div>
@@ -239,9 +233,9 @@ export default function TimeTracking() {
             <Label htmlFor="date-filter" className="block text-sm font-medium mb-2">Select Date</Label>
             <Input
               id="date-filter"
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
             />
           </div>
           <Dialog open={isStartTimerDialogOpen} onOpenChange={setIsStartTimerDialogOpen}>
@@ -432,13 +426,20 @@ export default function TimeTracking() {
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between">
-                <div>
+                <div className="flex-1">
                   <h4 className="font-semibold text-blue-900">
-                    {getTaskName(activeTimer.taskId)}
+                    Timer Active: {getTaskName(activeTimer.taskId)}
                   </h4>
                   <p className="text-sm text-blue-700">
                     {getProjectName(activeTimer.taskId)} • Started at {formatTime(activeTimer.startTime)}
                   </p>
+                  <Button
+                    variant="link"
+                    className="p-0 h-auto text-sm text-blue-700 mt-1"
+                    onClick={() => navigate(`/tasks/${activeTimer.taskId}`)}
+                  >
+                    View Task Details →
+                  </Button>
                 </div>
                 <Button variant="destructive" onClick={handleStopTimer}>
                   <Square className="h-4 w-4 mr-2" />

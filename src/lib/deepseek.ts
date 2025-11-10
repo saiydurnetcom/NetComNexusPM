@@ -1,8 +1,13 @@
 import { AISuggestion } from '../types';
 
 // AI Service Configuration
-// To use a real AI API, set VITE_AI_API_KEY and VITE_AI_API_URL in your .env file
-// Example for Deepseek:
+// ⚠️ SECURITY: NEVER hardcode API keys in this file!
+// Always use environment variables: VITE_AI_API_KEY and VITE_AI_API_URL
+// 
+// For local development: Create a .env file (never commit it!)
+// For Vercel: Add environment variables in project settings
+//
+// Example .env file:
 // VITE_AI_API_KEY=sk-your-api-key-here
 // VITE_AI_API_URL=https://api.deepseek.com/v1/chat/completions
 

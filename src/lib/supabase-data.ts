@@ -127,16 +127,31 @@ export const timeTrackingService = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
 
-    // Check if there's already an active timer
-    const { data: activeTimer } = await supabase
+    // Check if there's already an active timer for this specific task
+    const { data: existingTimer } = await supabase
+      .from('time_entries')
+      .select('*')
+      .eq('userId', user.id)
+      .eq('taskId', taskId)
+      .is('endTime', null)
+      .single();
+
+    if (existingTimer) {
+      // Timer already running for this task
+      return existingTimer;
+    }
+
+    // Check if there's an active timer for a different task
+    const { data: otherActiveTimer } = await supabase
       .from('time_entries')
       .select('*')
       .eq('userId', user.id)
       .is('endTime', null)
       .single();
 
-    if (activeTimer) {
-      throw new Error('There is already an active timer. Please stop it first.');
+    if (otherActiveTimer) {
+      // Stop the other timer and start this one
+      await this.stopTimer(otherActiveTimer.id);
     }
 
     const { data: timeEntry, error } = await supabase

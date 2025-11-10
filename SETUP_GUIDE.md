@@ -143,8 +143,11 @@ After running the migration, verify that all tables were created:
 ## Next Steps
 
 1. **Set up real AI integration** (optional)
-   - Get API key from Deepseek or similar service
-   - Update `src/lib/deepseek.ts`
+   - Get API key from Deepseek, OpenAI, or similar service
+   - **NEVER hardcode API keys in source files!**
+   - For local: Create `.env` file with `VITE_AI_API_KEY` and `VITE_AI_API_URL`
+   - For Vercel: Add environment variables in project settings
+   - See `AI_FUNCTIONALITY_EXPLAINED.md` for details
 
 2. **Customize UI** (optional)
    - Modify colors, fonts, layouts in Tailwind config
