@@ -239,11 +239,15 @@ export const timeTrackingService = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;
 
+    // Use maybeSingle() instead of single() to handle 0 or 1 rows
+    // If multiple timers exist, get the most recent one
     const { data, error } = await supabase
       .from('time_entries')
       .select('*')
       .eq('userId', user.id)
       .is('endTime', null)
+      .order('startTime', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (error) {
@@ -511,8 +515,16 @@ export const aiSuggestionsService = {
 
     const task = await tasksService.createTask(taskData);
 
+    // Link task to meeting by updating task with meetingId
+    if (suggestion.meetingId) {
+      await supabase
+        .from('tasks')
+        .update({ meetingId: suggestion.meetingId })
+        .eq('id', task.id);
+    }
+
     // Update suggestion status
-    await supabase
+    const { error: updateError } = await supabase
       .from('ai_suggestions')
       .update({
         status: 'approved',
@@ -520,6 +532,11 @@ export const aiSuggestionsService = {
         reviewedAt: new Date().toISOString(),
       })
       .eq('id', suggestionId);
+
+    if (updateError) {
+      console.error('Error updating suggestion status:', updateError);
+      // Don't throw - task was created successfully
+    }
 
     return task;
   },

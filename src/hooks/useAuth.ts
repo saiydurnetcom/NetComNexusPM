@@ -21,23 +21,47 @@ export const useAuth = () => {
 
     try {
       // Try to fetch user from users table with timeout
+      // Use maybeSingle() to handle cases where user doesn't exist in table
       const queryPromise = supabase
         .from('users')
         .select('*')
         .eq('id', authUser.id)
-        .single();
+        .maybeSingle();
 
       // Add timeout to prevent hanging
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Query timeout')), 3000)
+        setTimeout(() => reject(new Error('Query timeout')), 2000)
       );
 
-      const { data: dbUser, error } = await Promise.race([
+      const result = await Promise.race([
         queryPromise,
         timeoutPromise
       ]) as any;
 
-      if (dbUser && !error) {
+      // Supabase returns { data, error } format
+      if (result && result.error) {
+        // If it's a 500 error or RLS error, try using RPC function as fallback
+        if (result.error.code === 'PGRST301' || result.error.status === 500 || result.error.message?.includes('500')) {
+          try {
+            // Try to get role via RPC function (bypasses RLS)
+            const { data: roleData, error: rpcError } = await supabase.rpc('get_current_user_role');
+            if (!rpcError && roleData) {
+              return {
+                ...fallbackUser,
+                role: roleData as string || 'member',
+              };
+            }
+          } catch (rpcError) {
+            // Ignore RPC errors
+          }
+        }
+        // If query failed, return fallback
+        return fallbackUser;
+      }
+      
+      // Check if result has data property (Supabase response format)
+      if (result && result.data) {
+        const dbUser = result.data;
         // User exists in users table, use that data
         return {
           id: dbUser.id,
@@ -49,9 +73,12 @@ export const useAuth = () => {
           createdAt: dbUser.createdAt || dbUser.created_at || authUser.created_at,
         };
       }
-    } catch (error) {
+    } catch (error: any) {
       // Silently fail and use fallback - don't block the app
-      console.warn('Could not fetch user from database, using auth metadata:', error);
+      // Only log if it's not a timeout or expected error
+      if (error?.message !== 'Query timeout' && error?.code !== 'PGRST116') {
+        console.warn('Could not fetch user from database, using auth metadata:', error);
+      }
     }
 
     // Fallback to auth user metadata if users table doesn't have the user or query fails

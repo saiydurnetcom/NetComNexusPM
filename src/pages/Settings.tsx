@@ -11,6 +11,7 @@ import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/lib/supabase';
+import { RefreshCw } from 'lucide-react';
 import { 
   User, 
   Bell, 
@@ -248,11 +249,55 @@ export default function Settings() {
                 <div className="space-y-2">
                   <Label>Account Role</Label>
                   <p className="text-sm text-muted-foreground">
-                    Your current role: <strong>{user?.role || 'member'}</strong>
+                    Your current role: <strong className="capitalize">{user?.role || 'member'}</strong>
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Role changes must be made by an administrator.
+                    Role changes must be made by an administrator in the Admin panel.
                   </p>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={async () => {
+                      try {
+                        // Try to get role directly from database using RPC
+                        const { data: roleData, error: rpcError } = await supabase.rpc('get_current_user_role');
+                        if (!rpcError && roleData) {
+                          // Update user role directly
+                          const { data: { session } } = await supabase.auth.getSession();
+                          if (session?.user) {
+                            const updatedUser = {
+                              ...user!,
+                              role: roleData as 'admin' | 'manager' | 'member',
+                            };
+                            // Force update the user state
+                            await refreshUser();
+                            toast({
+                              title: 'Success',
+                              description: `Role refreshed: ${roleData}. ${roleData === 'admin' ? 'You should now see the Admin link in navigation.' : ''}`,
+                            });
+                            // Force page reload to update navigation
+                            setTimeout(() => window.location.reload(), 1000);
+                          }
+                        } else {
+                          // Fallback to refreshUser
+                          await refreshUser();
+                          toast({
+                            title: 'Info',
+                            description: 'Role refreshed. If you recently became an admin, refresh the page to see Admin link.',
+                          });
+                        }
+                      } catch (error) {
+                        toast({
+                          title: 'Error',
+                          description: 'Failed to refresh role. Make sure you have run the RLS migration.',
+                          variant: 'destructive',
+                        });
+                      }
+                    }}
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Refresh Role from Database
+                  </Button>
                 </div>
               </CardContent>
             </Card>

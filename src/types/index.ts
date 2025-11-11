@@ -31,6 +31,7 @@ export interface Task {
   estimatedHours: number;
   assignedTo: string;
   reviewerId?: string | null; // Reviewer when task is in review status
+  meetingId?: string | null; // Meeting from which this task was created
   createdBy: string;
   createdAt: string;
   updatedAt: string;

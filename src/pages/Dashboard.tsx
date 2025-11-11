@@ -110,9 +110,9 @@ export default function Dashboard() {
           .select('availableHours')
           .eq('userId', user.id)
           .eq('weekStartDate', weekStartStr)
-          .single();
+          .maybeSingle();
 
-        const hours = weeklyHours?.availableHours || 40;
+        const hours = (weeklyHours?.availableHours as number) || 40;
         setAvailableHours(hours);
         const availableMinutes = hours * 60;
 

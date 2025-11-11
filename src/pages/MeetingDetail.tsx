@@ -17,6 +17,7 @@ import { useAISuggestions } from '@/hooks/useAISuggestions';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/components/ui/use-toast';
 import { usersService } from '@/lib/users-service';
+import { supabase } from '@/lib/supabase';
 import { Meeting, AISuggestion, Task, TaskCreateData, User } from '@/types';
 import { 
   Calendar, 
@@ -107,14 +108,14 @@ export default function MeetingDetail() {
         const suggestionsData = await getMeetingSuggestions(id);
         setSuggestions(suggestionsData);
         
-        // Find tasks that were created from approved suggestions
-        const approvedSuggestionIds = suggestionsData
-          .filter(s => s.status === 'approved')
-          .map(s => s.id);
+        // Find tasks that were created from this meeting
+        const { data: meetingTasks } = await supabase
+          .from('tasks')
+          .select('*')
+          .eq('meetingId', id)
+          .order('createdAt', { ascending: false });
         
-        // Note: We'd need to track which tasks came from which suggestions
-        // For now, we'll show all tasks that might be related
-        // In a real implementation, you'd have a taskSuggestionId field
+        setTasksFromMeeting(meetingTasks || []);
       }
     } catch (err) {
       toast({
@@ -232,10 +233,14 @@ export default function MeetingDetail() {
 
       await approveSuggestion(approvingSuggestion.id, modifications);
       
-      // Reload suggestions
+      // Reload suggestions and tasks
       if (id) {
-        const updatedSuggestions = await getMeetingSuggestions(id);
+        const [updatedSuggestions, { data: meetingTasks }] = await Promise.all([
+          getMeetingSuggestions(id),
+          supabase.from('tasks').select('*').eq('meetingId', id).order('createdAt', { ascending: false })
+        ]);
         setSuggestions(updatedSuggestions);
+        setTasksFromMeeting(meetingTasks || []);
       }
 
       toast({
@@ -246,6 +251,7 @@ export default function MeetingDetail() {
       setApprovingSuggestion(null);
       setApprovalForm({ title: '', description: '', projectId: '', priority: 'medium', assignedTo: '', dueDate: '' });
     } catch (error) {
+      console.error('Error approving suggestion:', error);
       toast({
         title: 'Error',
         description: error instanceof Error ? error.message : 'Failed to approve suggestion',
@@ -281,6 +287,7 @@ export default function MeetingDetail() {
       setRejectingSuggestion(null);
       setRejectionReason('');
     } catch (error) {
+      console.error('Error rejecting suggestion:', error);
       toast({
         title: 'Error',
         description: error instanceof Error ? error.message : 'Failed to reject suggestion',
@@ -304,10 +311,14 @@ export default function MeetingDetail() {
 
       await approveSuggestion(editingSuggestion.id, modifications);
       
-      // Reload suggestions
+      // Reload suggestions and tasks
       if (id) {
-        const updatedSuggestions = await getMeetingSuggestions(id);
+        const [updatedSuggestions, { data: meetingTasks }] = await Promise.all([
+          getMeetingSuggestions(id),
+          supabase.from('tasks').select('*').eq('meetingId', id).order('createdAt', { ascending: false })
+        ]);
         setSuggestions(updatedSuggestions);
+        setTasksFromMeeting(meetingTasks || []);
       }
 
       toast({
@@ -318,6 +329,7 @@ export default function MeetingDetail() {
       setEditingSuggestion(null);
       setApprovalForm({ title: '', description: '', projectId: '', priority: 'medium', assignedTo: '', dueDate: '' });
     } catch (error) {
+      console.error('Error editing and approving suggestion:', error);
       toast({
         title: 'Error',
         description: error instanceof Error ? error.message : 'Failed to approve suggestion',
@@ -442,6 +454,42 @@ export default function MeetingDetail() {
               </CardContent>
             </Card>
 
+            {/* Tasks Created from This Meeting */}
+            {tasksFromMeeting.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Tasks Created from This Meeting</CardTitle>
+                  <CardDescription>
+                    {tasksFromMeeting.length} task{tasksFromMeeting.length !== 1 ? 's' : ''} created from approved suggestions
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {tasksFromMeeting.map((task) => (
+                      <div
+                        key={task.id}
+                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border cursor-pointer hover:bg-gray-100"
+                        onClick={() => navigate(`/tasks/${task.id}`)}
+                      >
+                        <div className="flex-1">
+                          <div className="font-medium">{task.title}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {task.status} • {task.priority} priority
+                          </div>
+                        </div>
+                        <Button variant="ghost" size="sm" onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/tasks/${task.id}`);
+                        }}>
+                          View Task
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* All Suggestions */}
             {suggestions.length > 0 && (
               <Card>
@@ -455,8 +503,12 @@ export default function MeetingDetail() {
                   {suggestions.map((suggestion) => (
                     <Card 
                       key={suggestion.id} 
-                      className={`border transition-all hover:shadow-md ${
-                        suggestion.status === 'pending' ? 'cursor-pointer hover:border-blue-300' : ''
+                      className={`border-2 transition-all hover:shadow-md ${
+                        suggestion.status === 'approved' 
+                          ? 'border-green-200 bg-green-50/30' 
+                          : suggestion.status === 'rejected'
+                          ? 'border-red-200 bg-red-50/30'
+                          : 'border-yellow-200 bg-yellow-50/30 cursor-pointer hover:border-yellow-300'
                       }`}
                     >
                       <CardContent className="p-4">
@@ -465,7 +517,16 @@ export default function MeetingDetail() {
                             <div className="flex items-center gap-2 flex-wrap">
                               {getStatusIcon(suggestion.status)}
                               <h4 className="font-semibold">{suggestion.suggestedTask}</h4>
-                              <Badge variant={getStatusColor(suggestion.status)}>
+                              <Badge 
+                                variant={getStatusColor(suggestion.status)}
+                                className={
+                                  suggestion.status === 'approved' 
+                                    ? 'bg-green-600 text-white'
+                                    : suggestion.status === 'rejected'
+                                    ? 'bg-red-600 text-white'
+                                    : 'bg-yellow-500 text-white'
+                                }
+                              >
                                 {suggestion.status}
                               </Badge>
                             </div>
