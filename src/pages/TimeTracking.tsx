@@ -7,12 +7,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
-import Navigation from '@/components/Navigation';
+import AppLayout from '@/components/AppLayout';
 import { useTimeTracking } from '@/hooks/useTimeTracking';
 import { useTasks } from '@/hooks/useTasks';
 import { useProjects } from '@/hooks/useProjects';
 import { useToast } from '@/components/ui/use-toast';
 import { Clock, Play, Square, Calendar, BarChart3, Plus } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 export default function TimeTracking() {
   const navigate = useNavigate();
@@ -175,9 +176,8 @@ export default function TimeTracking() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navigation />
-      <div className="max-w-6xl mx-auto p-6">
+    <AppLayout>
+      <div className="p-6 lg:p-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Time Tracking</h1>
           <p className="text-gray-600">Track and manage your time entries</p>
@@ -185,44 +185,44 @@ export default function TimeTracking() {
 
         {/* Stats and Controls */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Card>
+          <Card className="border-0 shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Today's Total</CardTitle>
-              <Clock className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium text-gray-600">Total Time Today</CardTitle>
+              <Clock className="h-5 w-5 text-gray-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatDuration(totalTimeToday)}</div>
-              <p className="text-xs text-muted-foreground">Time tracked today</p>
+              <div className="text-3xl font-bold text-gray-900">{formatDuration(totalTimeToday)}</div>
+              <p className="text-xs text-gray-500 mt-1">Time tracked today</p>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="border-0 shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Active Timer</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-600">Active Timer</CardTitle>
               {activeTimer ? (
-                <Play className="h-4 w-4 text-green-600" />
+                <Play className="h-5 w-5 text-green-600" />
               ) : (
-                <Square className="h-4 w-4 text-muted-foreground" />
+                <Square className="h-5 w-5 text-gray-400" />
               )}
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
+              <div className="text-3xl font-bold text-gray-900">
                 {activeTimer ? 'Running' : 'Stopped'}
               </div>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-gray-500 mt-1">
                 {activeTimer ? 'Timer active' : 'No active timer'}
               </p>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="border-0 shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Entries</CardTitle>
-              <BarChart3 className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium text-gray-600">Entries Today</CardTitle>
+              <BarChart3 className="h-5 w-5 text-gray-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{timeEntries.length}</div>
-              <p className="text-xs text-muted-foreground">All time entries</p>
+              <div className="text-3xl font-bold text-gray-900">{filteredEntries.length}</div>
+              <p className="text-xs text-gray-500 mt-1">Time entries</p>
             </CardContent>
           </Card>
         </div>
@@ -381,67 +381,103 @@ export default function TimeTracking() {
         </div>
 
         {/* Time Entries List */}
-        <Card>
+        <Card className="border-0 shadow-sm">
           <CardHeader>
-            <CardTitle>Time Entries for {new Date(selectedDate).toLocaleDateString()}</CardTitle>
-            <CardDescription>
-              {filteredEntries.length} entries totaling {formatDuration(totalTimeToday)}
+            <CardTitle className="text-lg font-semibold">Recent Time Entries</CardTitle>
+            <CardDescription className="mt-1">
+              {filteredEntries.length} entries totaling {formatDuration(totalTimeToday)} for {new Date(selectedDate).toLocaleDateString()}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {filteredEntries.map((entry) => (
-                <div key={entry.id} className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="flex-1">
-                    <h4 className="font-semibold">{getTaskName(entry.taskId)}</h4>
-                    <p className="text-sm text-muted-foreground">
-                      {getProjectName(entry.taskId)} • {formatTime(entry.startTime)}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-mono text-lg">
-                      {formatDuration(entry.durationMinutes || 0)}
+            {filteredEntries.length === 0 ? (
+              <div className="text-center py-12">
+                <Clock className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                <p className="text-sm text-gray-500">No time entries for this date</p>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="mt-3"
+                  onClick={() => setIsDialogOpen(true)}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Time Entry
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {filteredEntries.map((entry) => {
+                  const task = tasks.find(t => t.id === entry.taskId);
+                  const project = task ? projects.find(p => p.id === task.projectId) : null;
+                  const isActive = !entry.endTime;
+                  return (
+                    <div 
+                      key={entry.id} 
+                      className="flex items-center justify-between p-4 border-0 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+                      onClick={() => task && navigate(`/tasks/${task.id}`)}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h4 className="font-medium text-sm text-gray-900">{getTaskName(entry.taskId)}</h4>
+                          {isActive && (
+                            <Badge variant="default" className="bg-blue-100 text-blue-700 text-xs">
+                              active
+                            </Badge>
+                          )}
+                          {entry.billable && (
+                            <Badge variant="outline" className="text-xs">
+                              Billable
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500">
+                          {getProjectName(entry.taskId)} • {formatTime(entry.startTime)} - {entry.endTime ? formatTime(entry.endTime) : 'Active'}
+                        </p>
+                        {entry.description && (
+                          <p className="text-sm text-gray-600 mt-1 line-clamp-1">{entry.description}</p>
+                        )}
+                      </div>
+                      <div className="text-right ml-4">
+                        <p className="text-lg font-semibold text-gray-900">{formatDuration(entry.durationMinutes || 0)}</p>
+                      </div>
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      {entry.description || 'No description'}
-                    </p>
-                  </div>
-                </div>
-              ))}
-              {filteredEntries.length === 0 && (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>No time entries for this date</p>
-                </div>
-              )}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
 
         {/* Active Timer Controls */}
         {activeTimer && (
-          <Card className="mt-6 bg-blue-50 border-blue-200">
+          <Card className="mt-6 border-0 shadow-sm bg-gradient-to-r from-blue-50 to-indigo-50 border-l-4 border-blue-500">
             <CardHeader>
-              <CardTitle className="text-blue-900">Active Timer</CardTitle>
+              <CardTitle className="text-blue-900 flex items-center gap-2">
+                <Play className="h-5 w-5 text-blue-600" />
+                Active Timer
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between">
                 <div className="flex-1">
-                  <h4 className="font-semibold text-blue-900">
-                    Timer Active: {getTaskName(activeTimer.taskId)}
+                  <h4 className="font-semibold text-gray-900 text-lg mb-1">
+                    {getTaskName(activeTimer.taskId)}
                   </h4>
-                  <p className="text-sm text-blue-700">
+                  <p className="text-sm text-gray-600 mb-2">
                     {getProjectName(activeTimer.taskId)} • Started at {formatTime(activeTimer.startTime)}
                   </p>
                   <Button
                     variant="link"
-                    className="p-0 h-auto text-sm text-blue-700 mt-1"
+                    className="p-0 h-auto text-sm text-blue-600 hover:text-blue-700"
                     onClick={() => navigate(`/tasks/${activeTimer.taskId}`)}
                   >
                     View Task Details →
                   </Button>
                 </div>
-                <Button variant="destructive" onClick={handleStopTimer}>
+                <Button 
+                  variant="destructive" 
+                  onClick={handleStopTimer}
+                  className="bg-red-600 hover:bg-red-700"
+                >
                   <Square className="h-4 w-4 mr-2" />
                   Stop Timer
                 </Button>
@@ -450,6 +486,6 @@ export default function TimeTracking() {
           </Card>
         )}
       </div>
-    </div>
+    </AppLayout>
   );
 }

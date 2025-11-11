@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import Navigation from '@/components/Navigation';
+import AppLayout from '@/components/AppLayout';
 import { useMeetings } from '@/hooks/useMeetings';
 import { useProjects } from '@/hooks/useProjects';
 import { useToast } from '@/components/ui/use-toast';
@@ -46,9 +46,8 @@ export default function Meetings() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navigation />
-      <div className="container mx-auto p-6">
+    <AppLayout>
+      <div className="p-6 lg:p-8">
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -170,7 +169,7 @@ export default function Meetings() {
           </>
         )}
       </div>
-    </div>
+    </AppLayout>
   );
 }
 

@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import Navigation from '@/components/Navigation';
+import AppLayout from '@/components/AppLayout';
 import { useToast } from '@/components/ui/use-toast';
 import { useAISuggestions } from '@/hooks/useAISuggestions';
 import { useProjects } from '@/hooks/useProjects';
@@ -117,9 +117,8 @@ export default function MeetingProcessor() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navigation />
-      <div className="container mx-auto p-6 space-y-6">
+    <AppLayout>
+      <div className="p-6 lg:p-8 space-y-6">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Process Meeting Notes</h1>
@@ -294,6 +293,6 @@ export default function MeetingProcessor() {
         </Card>
       )}
       </div>
-    </div>
+    </AppLayout>
   );
 }

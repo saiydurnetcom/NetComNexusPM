@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import Navigation from '@/components/Navigation';
+import AppLayout from '@/components/AppLayout';
 import { useTasks } from '@/hooks/useTasks';
 import { useProjects } from '@/hooks/useProjects';
 import { useTimeTracking } from '@/hooks/useTimeTracking';
@@ -287,9 +287,8 @@ export default function TaskDetail() {
   const isOverdue = new Date(task.dueDate) < new Date() && task.status !== 'completed';
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navigation />
-      <div className="container mx-auto p-6 max-w-5xl">
+    <AppLayout>
+      <div className="p-6 lg:p-8 max-w-5xl mx-auto">
         {/* Header */}
         <div className="mb-6">
           <div className="flex items-start justify-between mb-4">
@@ -617,7 +616,7 @@ export default function TaskDetail() {
           </div>
         </div>
       </div>
-    </div>
+    </AppLayout>
   );
 }
 

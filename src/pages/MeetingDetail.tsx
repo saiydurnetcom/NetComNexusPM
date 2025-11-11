@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import Navigation from '@/components/Navigation';
+import AppLayout from '@/components/AppLayout';
 import { useMeetings } from '@/hooks/useMeetings';
 import { useProjects } from '@/hooks/useProjects';
 import { useTasks } from '@/hooks/useTasks';
@@ -99,23 +99,21 @@ export default function MeetingDetail() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <Navigation />
-        <div className="container mx-auto p-6">
+      <AppLayout>
+        <div className="p-6 lg:p-8">
           <div className="text-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
             <p className="text-muted-foreground">Loading meeting...</p>
           </div>
         </div>
-      </div>
+      </AppLayout>
     );
   }
 
   if (error || !meeting) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <Navigation />
-        <div className="container mx-auto p-6">
+      <AppLayout>
+        <div className="p-6 lg:p-8">
           <Card>
             <CardContent className="pt-6">
               <div className="text-center py-12">
@@ -127,14 +125,13 @@ export default function MeetingDetail() {
             </CardContent>
           </Card>
         </div>
-      </div>
+      </AppLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navigation />
-      <div className="container mx-auto p-6 max-w-5xl">
+    <AppLayout>
+      <div className="p-6 lg:p-8 max-w-5xl mx-auto">
         {/* Header */}
         <div className="mb-6">
           <Button
@@ -332,7 +329,7 @@ export default function MeetingDetail() {
           </div>
         </div>
       </div>
-    </div>
+    </AppLayout>
   );
 }
 

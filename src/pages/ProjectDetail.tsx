@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import Navigation from '@/components/Navigation';
+import AppLayout from '@/components/AppLayout';
 import { useTasks } from '@/hooks/useTasks';
 import { useProjects } from '@/hooks/useProjects';
 import { useAuth } from '@/hooks/useAuth';
@@ -116,13 +116,21 @@ export default function ProjectDetail() {
   };
 
   if (!currentProject) {
-    return <div>Loading project...</div>;
+    return (
+      <AppLayout>
+        <div className="p-6 lg:p-8">
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading project...</p>
+          </div>
+        </div>
+      </AppLayout>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navigation />
-      <div className="container mx-auto p-6 space-y-6">
+    <AppLayout>
+      <div className="p-6 lg:p-8 space-y-6">
         <Card>
         <CardHeader>
           <CardTitle>{currentProject.name}</CardTitle>
@@ -238,6 +246,6 @@ export default function ProjectDetail() {
         </CardContent>
       </Card>
       </div>
-    </div>
+    </AppLayout>
   );
 }

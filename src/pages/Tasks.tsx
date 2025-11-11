@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import Navigation from '@/components/Navigation';
+import AppLayout from '@/components/AppLayout';
 import { useTasks } from '@/hooks/useTasks';
 import { useProjects } from '@/hooks/useProjects';
 import { useAuth } from '@/hooks/useAuth';
@@ -19,7 +19,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { tasksService } from '@/lib/supabase-data';
 import { usersService } from '@/lib/users-service';
 import { Task, User } from '@/types';
-import { Plus, Search, Filter, Edit, Trash2, Calendar, Clock, ArrowUpDown, CheckCircle2, Circle, PlayCircle, User as UserIcon } from 'lucide-react';
+import { Plus, Search, Filter, Edit, Trash2, Calendar, Clock, ArrowUpDown, CheckCircle2, Circle, PlayCircle, User as UserIcon, FolderKanban } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function Tasks() {
@@ -29,6 +29,7 @@ export default function Tasks() {
   const { projects, fetchProjects } = useProjects();
   const { timeEntries, fetchTimeEntries } = useTimeTracking();
   const { toast } = useToast();
+  const [availableUsers, setAvailableUsers] = useState<User[]>([]);
   
   // Dialog states
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -297,9 +298,8 @@ export default function Tasks() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navigation />
-      <div className="max-w-7xl mx-auto p-6">
+    <AppLayout>
+      <div className="p-6 lg:p-8">
         <div className="mb-8">
           <div className="flex justify-between items-center mb-4">
             <div>
@@ -536,189 +536,268 @@ export default function Tasks() {
 
         {!isLoading && !tasksError && (
           <>
-            <Card>
-              <CardHeader>
-                <CardTitle>Tasks ({filteredTasks.length})</CardTitle>
-                <CardDescription>
-                  {filteredTasks.length === tasks.length 
-                    ? 'All tasks' 
-                    : `Showing ${filteredTasks.length} of ${tasks.length} tasks`}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-12"></TableHead>
-                      <TableHead>Task</TableHead>
-                      <TableHead>Project</TableHead>
-                      <TableHead>Assigned To</TableHead>
-                      <TableHead>Priority</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Due Date</TableHead>
-                      <TableHead>Time</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredTasks.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
-                          No tasks found. {searchTerm || statusFilter !== 'all' || priorityFilter !== 'all' || projectFilter !== 'all' 
-                            ? 'Try adjusting your filters.' 
-                            : 'Create your first task!'}
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      filteredTasks.map((task) => {
-                        const project = projects.find(p => p.id === task.projectId);
-                        const dueDate = new Date(task.dueDate);
-                        const isTaskOverdue = isOverdue(task.dueDate);
-                        const assignedUser = availableUsers.find(u => u.id === task.assignedTo) || user;
-                        const taskTimeEntries = timeEntries.filter(entry => entry.taskId === task.id);
-                        const totalTime = taskTimeEntries.reduce((total, entry) => total + (entry.durationMinutes || 0), 0);
-                        
-                        return (
-                          <TableRow key={task.id}>
-                            <TableCell>
+            {/* Summary Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Total Tasks</p>
+                      <p className="text-2xl font-bold">{tasks.length}</p>
+                    </div>
+                    <Circle className="h-8 w-8 text-muted-foreground" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">In Progress</p>
+                      <p className="text-2xl font-bold text-blue-600">
+                        {tasks.filter(t => t.status === 'in_progress').length}
+                      </p>
+                    </div>
+                    <PlayCircle className="h-8 w-8 text-blue-600" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Completed</p>
+                      <p className="text-2xl font-bold text-green-600">
+                        {tasks.filter(t => t.status === 'completed').length}
+                      </p>
+                    </div>
+                    <CheckCircle2 className="h-8 w-8 text-green-600" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Overdue</p>
+                      <p className="text-2xl font-bold text-red-600">
+                        {tasks.filter(t => isOverdue(t.dueDate) && t.status !== 'completed').length}
+                      </p>
+                    </div>
+                    <Calendar className="h-8 w-8 text-red-600" />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Tasks Grid/List */}
+            {filteredTasks.length === 0 ? (
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="text-center py-12">
+                    <CheckCircle2 className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+                    <h3 className="text-lg font-semibold mb-2">
+                      {searchTerm || statusFilter !== 'all' || priorityFilter !== 'all' || projectFilter !== 'all'
+                        ? 'No tasks found'
+                        : 'No tasks yet'}
+                    </h3>
+                    <p className="text-muted-foreground mb-4">
+                      {searchTerm || statusFilter !== 'all' || priorityFilter !== 'all' || projectFilter !== 'all'
+                        ? 'Try adjusting your filters to see more tasks.'
+                        : 'Create your first task to get started!'}
+                    </p>
+                    {!searchTerm && statusFilter === 'all' && priorityFilter === 'all' && projectFilter === 'all' && (
+                      <Button onClick={() => setIsCreateDialogOpen(true)}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Create Your First Task
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                {filteredTasks.map((task) => {
+                  const project = projects.find(p => p.id === task.projectId);
+                  const dueDate = new Date(task.dueDate);
+                  const isTaskOverdue = isOverdue(task.dueDate);
+                  const assignedUser = availableUsers.find(u => u.id === task.assignedTo) || user;
+                  const taskTimeEntries = timeEntries.filter(entry => entry.taskId === task.id);
+                  const totalTime = taskTimeEntries.reduce((total, entry) => total + (entry.durationMinutes || 0), 0);
+                  const progressPercentage = task.estimatedHours > 0 
+                    ? Math.min(100, (totalTime / (task.estimatedHours * 60)) * 100)
+                    : 0;
+                  
+                  return (
+                    <Card
+                      key={task.id}
+                      className={`hover:shadow-lg transition-all cursor-pointer ${
+                        isTaskOverdue && task.status !== 'completed' ? 'border-red-300 bg-red-50/50' : ''
+                      }`}
+                      onClick={() => navigate(`/tasks/${task.id}`)}
+                    >
+                      <CardHeader className="pb-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <CardTitle className="text-lg line-clamp-2 mb-2">{task.title}</CardTitle>
+                            {task.description && (
+                              <CardDescription className="line-clamp-2 text-sm">
+                                {task.description}
+                              </CardDescription>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            {getStatusIcon(task.status)}
+                            <Select
+                              value={task.status}
+                              onValueChange={(value: Task['status']) => {
+                                handleStatusChange(task.id, value);
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <SelectTrigger className="w-28 h-8 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="todo">To Do</SelectItem>
+                                <SelectItem value="in_progress">In Progress</SelectItem>
+                                <SelectItem value="review">Review</SelectItem>
+                                <SelectItem value="completed">Completed</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {/* Project & Assignee */}
+                        <div className="flex items-center justify-between text-sm">
+                          <div className="flex items-center gap-2">
+                            {project ? (
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => {
-                                  const nextStatus = task.status === 'todo' ? 'in_progress' 
-                                    : task.status === 'in_progress' ? 'completed' 
-                                    : 'todo';
-                                  handleStatusChange(task.id, nextStatus);
+                                className="h-6 px-2 text-xs"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate(`/projects/${project.id}`);
                                 }}
                               >
-                                {getStatusIcon(task.status)}
+                                <FolderKanban className="h-3 w-3 mr-1" />
+                                {project.name}
                               </Button>
-                            </TableCell>
-                            <TableCell>
-                              <div>
-                                <Button
-                                  variant="link"
-                                  className="p-0 h-auto font-medium"
-                                  onClick={() => navigate(`/tasks/${task.id}`)}
-                                >
-                                  {task.title}
-                                </Button>
-                                {task.description && (
-                                  <div className="text-sm text-muted-foreground line-clamp-1">
-                                    {task.description}
-                                  </div>
-                                )}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              {project ? (
-                                <Button
-                                  variant="link"
-                                  className="p-0 h-auto"
-                                  onClick={() => navigate(`/projects/${project.id}`)}
-                                >
-                                  {project.name}
-                                </Button>
-                              ) : (
-                                <span className="text-muted-foreground">No Project</span>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">No Project</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <UserIcon className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-xs text-muted-foreground">
+                              {assignedUser ? `${assignedUser.firstName} ${assignedUser.lastName}` : 'Unassigned'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Priority & Due Date */}
+                        <div className="flex items-center justify-between">
+                          <Badge variant={getPriorityColor(task.priority)} className="text-xs">
+                            {task.priority}
+                          </Badge>
+                          <div className="flex items-center gap-1">
+                            <Calendar className={`h-3 w-3 ${isTaskOverdue ? 'text-red-600' : 'text-muted-foreground'}`} />
+                            <span className={`text-xs ${isTaskOverdue ? 'text-red-600 font-semibold' : 'text-muted-foreground'}`}>
+                              {format(dueDate, 'MMM dd, yyyy')}
+                            </span>
+                            {isTaskOverdue && task.status !== 'completed' && (
+                              <Badge variant="destructive" className="text-xs ml-1">Overdue</Badge>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Time Tracking */}
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-xs">
+                            <div className="flex items-center gap-1">
+                              <Clock className="h-3 w-3 text-muted-foreground" />
+                              <span className="font-medium">
+                                {Math.floor(totalTime / 60)}h {totalTime % 60}m
+                              </span>
+                              {task.estimatedHours > 0 && (
+                                <span className="text-muted-foreground">
+                                  / {task.estimatedHours}h est.
+                                </span>
                               )}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <UserIcon className="h-4 w-4 text-muted-foreground" />
-                                <span className="text-sm">
-                                  {assignedUser ? `${assignedUser.firstName} ${assignedUser.lastName}` : 'Unassigned'}
-                                </span>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant={getPriorityColor(task.priority)}>
-                                {task.priority}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Select
-                                value={task.status}
-                                onValueChange={(value: Task['status']) => handleStatusChange(task.id, value)}
+                            </div>
+                            {task.estimatedHours > 0 && (
+                              <span className="text-muted-foreground">
+                                {progressPercentage.toFixed(0)}%
+                              </span>
+                            )}
+                          </div>
+                          {task.estimatedHours > 0 && (
+                            <div className="w-full bg-gray-200 rounded-full h-1.5">
+                              <div
+                                className={`h-1.5 rounded-full ${
+                                  progressPercentage >= 100 ? 'bg-red-500' :
+                                  progressPercentage >= 80 ? 'bg-yellow-500' :
+                                  'bg-blue-500'
+                                }`}
+                                style={{ width: `${Math.min(100, progressPercentage)}%` }}
+                              />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center justify-end gap-2 pt-2 border-t">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditTask(task);
+                            }}
+                          >
+                            <Edit className="h-3 w-3 mr-1" />
+                            Edit
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 text-xs text-destructive hover:text-destructive"
+                                onClick={(e) => e.stopPropagation()}
                               >
-                                <SelectTrigger className="w-36">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="todo">To Do</SelectItem>
-                                  <SelectItem value="in_progress">In Progress</SelectItem>
-                                  <SelectItem value="review">Review</SelectItem>
-                                  <SelectItem value="completed">Completed</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <Calendar className="h-4 w-4 text-muted-foreground" />
-                                <span className={isTaskOverdue ? 'text-red-600 font-medium' : ''}>
-                                  {format(dueDate, 'MMM dd, yyyy')}
-                                </span>
-                                {isTaskOverdue && (
-                                  <Badge variant="destructive" className="text-xs">Overdue</Badge>
-                                )}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <Clock className="h-4 w-4 text-muted-foreground" />
-                                <span className="text-sm">
-                                  {Math.floor(totalTime / 60)}h {totalTime % 60}m
-                                </span>
-                                {task.estimatedHours > 0 && (
-                                  <span className="text-xs text-muted-foreground">
-                                    / {task.estimatedHours}h est.
-                                  </span>
-                                )}
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex justify-end gap-2">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleEditTask(task)}
+                                <Trash2 className="h-3 w-3 mr-1" />
+                                Delete
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete Task</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Are you sure you want to delete "{task.title}"? This action cannot be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDeleteTask(task.id)}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                                 >
-                                  <Edit className="h-4 w-4" />
-                                </Button>
-                                <AlertDialog>
-                                  <AlertDialogTrigger asChild>
-                                    <Button variant="ghost" size="sm">
-                                      <Trash2 className="h-4 w-4 text-destructive" />
-                                    </Button>
-                                  </AlertDialogTrigger>
-                                  <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                      <AlertDialogTitle>Delete Task</AlertDialogTitle>
-                                      <AlertDialogDescription>
-                                        Are you sure you want to delete "{task.title}"? This action cannot be undone.
-                                      </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                      <AlertDialogAction
-                                        onClick={() => handleDeleteTask(task.id)}
-                                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                      >
-                                        Delete
-                                      </AlertDialogAction>
-                                    </AlertDialogFooter>
-                                  </AlertDialogContent>
-                                </AlertDialog>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })
-                    )}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
           </>
         )}
 
@@ -814,6 +893,6 @@ export default function Tasks() {
           </DialogContent>
         </Dialog>
       </div>
-    </div>
+    </AppLayout>
   );
 }
