@@ -396,15 +396,27 @@ function UsersManagement() {
         });
 
         if (authError) {
+          console.error('Supabase Auth error:', authError);
           // Check if user already exists
-          if (authError.message.includes('already registered') || authError.message.includes('already exists')) {
+          if (authError.message?.includes('already registered') || authError.message?.includes('already exists') || authError.message?.includes('User already registered')) {
             throw new Error('A user with this email already exists. Please sync from auth or use a different email.');
           }
-          throw new Error(`Failed to create user: ${authError.message}`);
+          // Check for email confirmation required
+          if (authError.message?.includes('email') && authError.message?.includes('confirm')) {
+            throw new Error('Email confirmation is required. Please check your Supabase Auth settings or try again.');
+          }
+          // Check for password requirements
+          if (authError.message?.includes('password') || authError.message?.includes('Password')) {
+            throw new Error(`Password requirements not met: ${authError.message}`);
+          }
+          // Generic error with full message
+          const errorMsg = authError.message || authError.toString() || 'Unknown error';
+          throw new Error(`Failed to create user in authentication: ${errorMsg}`);
         }
 
+        // Note: If email confirmation is required, authData.user might exist but authData.session will be null
         if (!authData.user) {
-          throw new Error('User creation failed - no user returned');
+          throw new Error('User creation failed - no user returned from Supabase Auth. This might be due to email confirmation requirements.');
         }
 
         // Create user record in users table
@@ -443,10 +455,27 @@ function UsersManagement() {
         }
 
         if (userResult.error) {
-          // If user table insert fails, try to clean up auth user
-          console.error('Failed to create user record:', userResult.error);
+          // If user table insert fails, log the full error
+          console.error('Failed to create user record in database:', userResult.error);
+          console.error('Error code:', userResult.error.code);
+          console.error('Error message:', userResult.error.message);
+          console.error('Error details:', userResult.error);
+          
+          // Provide more helpful error messages
+          let errorMessage = `Failed to create user record: ${userResult.error.message || 'Unknown error'}`;
+          if (userResult.error.code === 'PGRST204') {
+            errorMessage = 'Column name mismatch. Please check your database schema.';
+          } else if (userResult.error.code === '23505') {
+            errorMessage = 'A user with this ID already exists in the database.';
+          } else if (userResult.error.code === '42501' || userResult.error.message?.includes('permission denied') || userResult.error.message?.includes('RLS')) {
+            errorMessage = 'Permission denied. Please check your Row Level Security (RLS) policies in Supabase.';
+          } else if (userResult.error.message?.includes('does not exist')) {
+            errorMessage = 'The users table does not exist. Please run the database migration.';
+          }
+          
           // Note: We can't easily delete the auth user without admin privileges
-          throw new Error(`Failed to create user record: ${userResult.error.message}`);
+          // The auth user might have been created, so we should inform the admin
+          throw new Error(`${errorMessage} Note: The user may have been created in authentication but not in the database.`);
         }
 
         // Send password reset email so user can set their own password
@@ -480,10 +509,37 @@ function UsersManagement() {
       loadData();
     } catch (error) {
       console.error('Error saving user:', error);
+      console.error('Error details:', {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        error: error,
+      });
+      
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      // Provide user-friendly error messages
+      let userMessage = errorMessage;
+      if (errorMessage.includes('already exists')) {
+        userMessage = 'A user with this email already exists. Please use a different email or sync from authentication.';
+      } else if (errorMessage.includes('Email confirmation') || errorMessage.includes('email') && errorMessage.includes('confirm')) {
+        userMessage = 'Email confirmation is required. Please check your Supabase Auth settings to disable email confirmation for admin-created users, or the user will need to confirm their email before they can log in.';
+      } else if (errorMessage.includes('Password requirements')) {
+        userMessage = errorMessage; // Keep the specific password error
+      } else if (errorMessage.includes('RLS') || errorMessage.includes('permission denied')) {
+        userMessage = 'Permission denied. Please check your Row Level Security (RLS) policies in Supabase to allow admins to create users.';
+      } else if (errorMessage.includes('does not exist')) {
+        userMessage = 'Database table not found. Please run the database migration in Supabase.';
+      } else if (errorMessage.includes('Column name mismatch')) {
+        userMessage = 'Database schema mismatch. Please check your database column names match the migration.';
+      } else if (errorMessage.includes('Database error')) {
+        userMessage = 'Database error occurred. Please check the browser console for details and verify your Supabase configuration.';
+      }
+      
       toast({
         title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to save user',
+        description: userMessage,
         variant: 'destructive',
+        duration: 10000, // Show for 10 seconds so user can read it
       });
     }
   };
