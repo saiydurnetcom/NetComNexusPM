@@ -8,10 +8,21 @@ Since you're the only user currently, you need to set your role to 'admin' in th
 
 1. Go to your Supabase Dashboard
 2. Navigate to SQL Editor
-3. Run the following SQL query (replace `your-email@example.com` with your actual email):
+3. **First, check what columns exist in your users table:**
 
 ```sql
--- Make yourself admin
+-- Check the users table structure
+SELECT column_name, data_type 
+FROM information_schema.columns 
+WHERE table_name = 'users';
+```
+
+4. **Then run the appropriate SQL based on your table structure:**
+
+**If your table has camelCase columns (firstName, lastName):**
+
+```sql
+-- Make yourself admin (if user already exists)
 UPDATE users 
 SET role = 'admin' 
 WHERE email = 'your-email@example.com';
@@ -21,7 +32,7 @@ INSERT INTO users (id, email, "firstName", "lastName", role, "isActive", "create
 SELECT 
   id,
   email,
-  COALESCE(raw_user_meta_data->>'firstName', 'User'),
+  COALESCE(raw_user_meta_data->>'firstName', split_part(email, '@', 1)),
   COALESCE(raw_user_meta_data->>'lastName', ''),
   'admin',
   true,
@@ -31,6 +42,39 @@ FROM auth.users
 WHERE email = 'your-email@example.com'
 ON CONFLICT (id) DO UPDATE SET role = 'admin';
 ```
+
+**If your table has snake_case columns (first_name, last_name):**
+
+```sql
+-- Make yourself admin (if user already exists)
+UPDATE users 
+SET role = 'admin' 
+WHERE email = 'your-email@example.com';
+
+-- If the users table doesn't have your user yet:
+INSERT INTO users (id, email, first_name, last_name, role, is_active, created_at, updated_at)
+SELECT 
+  id,
+  email,
+  COALESCE(raw_user_meta_data->>'firstName', split_part(email, '@', 1)),
+  COALESCE(raw_user_meta_data->>'lastName', ''),
+  'admin',
+  true,
+  created_at,
+  NOW()
+FROM auth.users
+WHERE email = 'your-email@example.com'
+ON CONFLICT (id) DO UPDATE SET role = 'admin';
+```
+
+**If the users table doesn't exist yet, run the migration first:**
+
+Run `supabase-migration-admin-and-tags.sql` to create the users table with the correct schema.
+
+**Important:** After setting your role to 'admin' in the users table:
+1. **Log out and log back in** - The app now reads the role from the `users` table, but you need to refresh your session
+2. Or refresh the page - The app will automatically fetch your role from the database on page load
+3. You should now see the "Admin" link in the navigation menu
 
 ### Option 2: Using Admin Panel (After First Admin is Created)
 
