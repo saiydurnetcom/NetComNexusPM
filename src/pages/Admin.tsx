@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/components/ui/use-toast';
+import { supabase } from '@/lib/supabase';
 import { 
   Users, 
   Building2, 
@@ -26,12 +27,13 @@ import {
 } from 'lucide-react';
 import { User, Department, Team, AllowedDomain, Tag } from '@/types';
 import { adminService } from '@/lib/admin-service';
-import { RefreshCw, Settings } from 'lucide-react';
+import { RefreshCw, Settings, AlertCircle } from 'lucide-react';
 
 export default function Admin() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('users');
+  const [isRefreshingRole, setIsRefreshingRole] = useState(false);
 
   // Check if user is admin or manager
   useEffect(() => {
@@ -69,9 +71,83 @@ export default function Admin() {
           <h1 className="text-3xl font-bold text-gray-900">Admin Panel</h1>
           <p className="text-gray-600">Manage users, teams, departments, and system settings</p>
           {user && (
-            <p className="text-sm text-muted-foreground mt-1">
-              Logged in as: {user.firstName} {user.lastName} ({user.email}) - Role: <strong>{user.role}</strong>
-            </p>
+            <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm">
+                <strong>Current User:</strong> {user.firstName} {user.lastName} ({user.email})
+              </p>
+              <p className="text-sm">
+                <strong>Detected Role:</strong> <span className={`font-bold ${user.role === 'admin' ? 'text-green-600' : user.role === 'manager' ? 'text-blue-600' : 'text-gray-600'}`}>{user.role || 'member'}</span>
+              </p>
+              <div className="mt-2 flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    setIsRefreshingRole(true);
+                    try {
+                      // Try to get role directly from database using RPC
+                      const { data: roleData, error: rpcError } = await supabase.rpc('get_current_user_role');
+                      if (!rpcError && roleData) {
+                        await refreshUser();
+                        toast({
+                          title: 'Success',
+                          description: `Role refreshed: ${roleData}. Refreshing page...`,
+                        });
+                        setTimeout(() => window.location.reload(), 1000);
+                      } else {
+                        await refreshUser();
+                        toast({
+                          title: 'Info',
+                          description: 'Role refreshed. If you recently became an admin, refresh the page.',
+                        });
+                      }
+                    } catch (error) {
+                      console.error('Error refreshing role:', error);
+                      await refreshUser();
+                      toast({
+                        title: 'Warning',
+                        description: 'Could not refresh role via RPC. Trying fallback method...',
+                        variant: 'default',
+                      });
+                    } finally {
+                      setIsRefreshingRole(false);
+                    }
+                  }}
+                  disabled={isRefreshingRole}
+                >
+                  <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshingRole ? 'animate-spin' : ''}`} />
+                  Refresh Role
+                </Button>
+              </div>
+              {user.role !== 'admin' && user.role !== 'manager' && (
+                <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded">
+                  <p className="text-xs text-yellow-800">
+                    <strong>⚠️ Access Issue:</strong> Your role is "{user.role}". To access User Management, you need to be an "admin" or "manager".
+                    <br />
+                    <br />
+                    <strong>To fix this:</strong>
+                    <br />
+                    1. Make sure your role in the `users` table is exactly 'admin' (lowercase, no quotes in SQL)
+                    <br />
+                    2. Click the "Refresh Role" button above
+                    <br />
+                    3. If that doesn't work, go to Settings → Security → Click "Refresh Role from Database"
+                    <br />
+                    4. Refresh the page (F5 or Ctrl+R)
+                    <br />
+                    <br />
+                    <strong>SQL to check your role:</strong>
+                    <br />
+                    <code className="text-xs bg-gray-100 p-1 rounded">SELECT id, email, role FROM users WHERE email = 'your-email@example.com';</code>
+                    <br />
+                    <br />
+                    <strong>SQL to set yourself as admin:</strong>
+                    <br />
+                    <code className="text-xs bg-gray-100 p-1 rounded">UPDATE users SET role = 'admin' WHERE email = 'your-email@example.com';</code>
+                  </p>
+                </div>
+              )}
+            </div>
           )}
         </div>
 

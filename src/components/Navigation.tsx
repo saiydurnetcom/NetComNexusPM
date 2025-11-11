@@ -1,4 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { 
@@ -16,6 +17,15 @@ import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 export default function Navigation() {
   const location = useLocation();
   const { logout, user } = useAuth();
+
+  // Debug logging (remove in production)
+  useEffect(() => {
+    if (user) {
+      console.log('[Navigation] User role:', user.role, 'Full user object:', user);
+    } else {
+      console.log('[Navigation] No user found');
+    }
+  }, [user]);
 
   const navItems = [
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
