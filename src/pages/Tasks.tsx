@@ -20,7 +20,8 @@ import { tasksService } from '@/lib/supabase-data';
 import { usersService } from '@/lib/users-service';
 import { supabase } from '@/lib/supabase';
 import { Task, User, Tag } from '@/types';
-import { Plus, Search, Filter, Edit, Trash2, Calendar, Clock, ArrowUpDown, CheckCircle2, Circle, PlayCircle, User as UserIcon, FolderKanban, Play, Square, Tag as TagIcon } from 'lucide-react';
+import { Plus, Search, Filter, Edit, Trash2, Calendar, Clock, ArrowUpDown, CheckCircle2, Circle, PlayCircle, User as UserIcon, FolderKanban, Play, Square, Tag as TagIcon, List, Grid } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { format } from 'date-fns';
 import { TagSelector } from '@/components/TagSelector';
 
@@ -58,6 +59,7 @@ export default function Tasks() {
   const [projectFilter, setProjectFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<'title' | 'dueDate' | 'priority' | 'status'>('dueDate');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
 
   useEffect(() => {
     const loadData = async () => {
@@ -708,6 +710,28 @@ export default function Tasks() {
 
         {!isLoading && !tasksError && (
           <>
+            {/* View Mode Toggle */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant={viewMode === 'grid' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setViewMode('grid')}
+                >
+                  <Grid className="h-4 w-4 mr-2" />
+                  Grid
+                </Button>
+                <Button
+                  variant={viewMode === 'table' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setViewMode('table')}
+                >
+                  <List className="h-4 w-4 mr-2" />
+                  Table
+                </Button>
+              </div>
+            </div>
+
             {/* Summary Stats */}
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
               <Card>
@@ -806,6 +830,193 @@ export default function Tasks() {
                   </div>
                 </CardContent>
               </Card>
+            ) : viewMode === 'table' ? (
+              <Card>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Title</TableHead>
+                        <TableHead>Project</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Priority</TableHead>
+                        <TableHead>Assignee</TableHead>
+                        <TableHead>Due Date</TableHead>
+                        <TableHead>Time</TableHead>
+                        <TableHead>Progress</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredTasks.map((task) => {
+                        const project = projects.find(p => p.id === task.projectId);
+                        const dueDate = new Date(task.dueDate);
+                        const isTaskOverdue = isOverdue(task.dueDate);
+                        const assignedUser = availableUsers.find(u => u.id === task.assignedTo) || user;
+                        const taskTimeEntries = timeEntries.filter(entry => entry.taskId === task.id);
+                        const totalTime = taskTimeEntries.reduce((total, entry) => total + (entry.durationMinutes || 0), 0);
+                        const progressPercentage = task.estimatedHours > 0 
+                          ? (totalTime / (task.estimatedHours * 60)) * 100
+                          : 0;
+                        const hasExceededEstimate = progressPercentage > 100;
+                        const hasExceeded120Percent = progressPercentage > 120;
+                        const isTaskTimerActive = activeTimer?.taskId === task.id;
+                        
+                        return (
+                          <TableRow 
+                            key={task.id} 
+                            className="cursor-pointer hover:bg-gray-50"
+                            onClick={() => navigate(`/tasks/${task.id}`)}
+                          >
+                            <TableCell className="font-medium max-w-xs">
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div className="truncate">{task.title}</div>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>{task.title}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            </TableCell>
+                            <TableCell>
+                              {project ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 px-2 text-xs"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigate(`/projects/${project.id}`);
+                                  }}
+                                >
+                                  {project.name}
+                                </Button>
+                              ) : (
+                                <span className="text-muted-foreground text-xs">No Project</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Select
+                                value={task.status}
+                                onValueChange={(value: Task['status']) => {
+                                  handleStatusChange(task.id, value);
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <SelectTrigger className="w-28 h-8 text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="todo">To Do</SelectItem>
+                                  <SelectItem value="in_progress">In Progress</SelectItem>
+                                  <SelectItem value="review">Review</SelectItem>
+                                  <SelectItem value="completed">Completed</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={getPriorityColor(task.priority)} className="text-xs">
+                                {task.priority}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-xs">
+                                {assignedUser ? `${assignedUser.firstName} ${assignedUser.lastName}` : 'Unassigned'}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <span className={`text-xs ${isTaskOverdue ? 'text-red-600 font-semibold' : ''}`}>
+                                {format(dueDate, 'MMM dd, yyyy')}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <div className="text-xs">
+                                <span className="font-medium">
+                                  {Math.floor(totalTime / 60)}h {totalTime % 60}m
+                                </span>
+                                {task.estimatedHours > 0 && (
+                                  <span className="text-muted-foreground">
+                                    {' '}/ {task.estimatedHours}h
+                                  </span>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              {task.estimatedHours > 0 ? (
+                                <div className="flex items-center gap-2 min-w-[100px]">
+                                  <div className="flex-1 bg-gray-200 rounded-full h-2">
+                                    <div
+                                      className={`h-2 rounded-full ${
+                                        hasExceeded120Percent ? 'bg-red-600' :
+                                        hasExceededEstimate ? 'bg-orange-500' :
+                                        progressPercentage >= 80 ? 'bg-yellow-500' :
+                                        'bg-blue-500'
+                                      }`}
+                                      style={{ width: `${Math.min(100, progressPercentage)}%` }}
+                                    />
+                                  </div>
+                                  <span className={`text-xs font-medium ${
+                                    hasExceeded120Percent ? 'text-red-600' :
+                                    hasExceededEstimate ? 'text-orange-600' :
+                                    ''
+                                  }`}>
+                                    {progressPercentage.toFixed(0)}%
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">-</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 w-7 p-0"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleTimerToggle(task);
+                                  }}
+                                >
+                                  {isTaskTimerActive ? (
+                                    <Square className="h-3 w-3 text-red-600" />
+                                  ) : (
+                                    <Play className="h-3 w-3" />
+                                  )}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 w-7 p-0"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEditClick(task);
+                                  }}
+                                >
+                                  <Edit className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 w-7 p-0 text-red-600 hover:text-red-700"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteClick(task);
+                                  }}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
                 {filteredTasks.map((task) => {
@@ -826,17 +1037,32 @@ export default function Tasks() {
                   return (
                     <Card
                       key={task.id}
-                      className={`hover:shadow-lg transition-all cursor-pointer ${
+                      className={`hover:shadow-lg transition-all cursor-pointer h-full flex flex-col ${
                         isTaskOverdue && task.status !== 'completed' ? 'border-red-300 bg-red-50/50' : ''
                       }`}
                       onClick={() => navigate(`/tasks/${task.id}`)}
                     >
-                      <CardHeader className="pb-3">
+                      <CardHeader className="pb-3 flex-shrink-0">
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
-                            <CardTitle className="text-lg line-clamp-2 mb-2">{task.title}</CardTitle>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <CardTitle className="text-lg line-clamp-2 mb-2">{task.title}</CardTitle>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p className="max-w-xs">{task.title}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                             {task.description && (
-                              <CardDescription className="line-clamp-2 text-sm">
+                              <CardDescription 
+                                className="line-clamp-2 text-sm cursor-pointer hover:text-blue-600"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate(`/tasks/${task.id}`);
+                                }}
+                              >
                                 {task.description}
                               </CardDescription>
                             )}
@@ -873,7 +1099,7 @@ export default function Tasks() {
                           </div>
                         </div>
                       </CardHeader>
-                      <CardContent className="space-y-3">
+                      <CardContent className="space-y-3 flex-1 flex flex-col">
                         {/* Project & Assignee */}
                         <div className="flex items-center justify-between text-sm">
                           <div className="flex items-center gap-2">
@@ -944,25 +1170,20 @@ export default function Tasks() {
                           </div>
                           {task.estimatedHours > 0 && (
                             <>
-                              <div className="w-full bg-gray-200 rounded-full h-1.5 relative">
+                              <div className="w-full bg-gray-200 rounded-full h-1.5 relative overflow-hidden">
                                 <div
-                                  className={`h-1.5 rounded-full ${
+                                  className={`h-1.5 rounded-full transition-all ${
                                     hasExceeded120Percent ? 'bg-red-600' :
                                     hasExceededEstimate ? 'bg-orange-500' :
                                     progressPercentage >= 80 ? 'bg-yellow-500' :
-                                    'bg-blue-500'
+                                    progressPercentage >= 50 ? 'bg-blue-500' :
+                                    'bg-green-500'
                                   }`}
                                   style={{ width: `${Math.min(100, progressPercentage)}%` }}
                                 />
-                                {hasExceededEstimate && (
-                                  <div
-                                    className="absolute top-0 left-0 h-1.5 bg-red-600 rounded-full"
-                                    style={{ width: `${Math.min(100, (progressPercentage - 100) / 2)}%`, left: '100%' }}
-                                  />
-                                )}
                               </div>
                               {hasExceededEstimate && (
-                                <p className={`text-xs ${
+                                <p className={`text-xs mt-1 ${
                                   hasExceeded120Percent ? 'text-red-600 font-semibold' : 'text-orange-600'
                                 }`}>
                                   {hasExceeded120Percent 
@@ -975,7 +1196,7 @@ export default function Tasks() {
                         </div>
 
                         {/* Actions */}
-                        <div className="flex items-center justify-end gap-2 pt-2 border-t">
+                        <div className="flex items-center justify-end gap-2 pt-2 border-t mt-auto">
                           <Button
                             variant={isTaskTimerActive ? "default" : "ghost"}
                             size="sm"
