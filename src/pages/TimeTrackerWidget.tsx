@@ -2,23 +2,37 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { useTimeTracking } from '@/hooks/useTimeTracking';
 import { useTasks } from '@/hooks/useTasks';
+import { useProjects } from '@/hooks/useProjects';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/components/ui/use-toast';
-import { Play, Square, Clock, X } from 'lucide-react';
+import { Play, Square, Clock, X, Download, Search } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { Task } from '@/types';
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
 
 export default function TimeTrackerWidget() {
   const { user } = useAuth();
   const { activeTimer, startTimer, stopTimer, fetchTimeEntries } = useTimeTracking();
   const { tasks, fetchTasks } = useTasks();
+  const { projects, fetchProjects } = useProjects();
   const { toast } = useToast();
   const [elapsedTime, setElapsedTime] = useState<string>('00:00:00');
   const [isMinimized, setIsMinimized] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [showInstallButton, setShowInstallButton] = useState(false);
 
   useEffect(() => {
     fetchTasks();
+    fetchProjects();
     fetchTimeEntries();
     
     // Refresh active timer every second
@@ -27,7 +41,44 @@ export default function TimeTrackerWidget() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [fetchTasks, fetchTimeEntries]);
+  }, [fetchTasks, fetchProjects, fetchTimeEntries]);
+
+  // PWA Install Prompt
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
+      setShowInstallButton(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    // Check if already installed
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      setShowInstallButton(false);
+    }
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    
+    if (outcome === 'accepted') {
+      toast({
+        title: 'Installing...',
+        description: 'The app is being installed',
+      });
+      setShowInstallButton(false);
+    }
+    
+    setDeferredPrompt(null);
+  };
 
   // Update elapsed time display
   useEffect(() => {
@@ -96,9 +147,28 @@ export default function TimeTrackerWidget() {
     }
   };
 
-  const quickStartTasks = tasks
+  const getProjectName = (task: Task) => {
+    if (!task.projectId) return null;
+    const project = projects.find(p => p.id === task.projectId);
+    return project?.name || null;
+  };
+
+  const availableTasks = tasks
     .filter(t => t.status !== 'completed')
-    .slice(0, 5);
+    .filter(t => {
+      if (!searchQuery) return true;
+      const query = searchQuery.toLowerCase();
+      return (
+        t.title.toLowerCase().includes(query) ||
+        getProjectName(t)?.toLowerCase().includes(query)
+      );
+    })
+    .sort((a, b) => {
+      // Sort by: in_progress first, then by title
+      if (a.status === 'in_progress' && b.status !== 'in_progress') return -1;
+      if (b.status === 'in_progress' && a.status !== 'in_progress') return 1;
+      return a.title.localeCompare(b.title);
+    });
 
   if (isMinimized) {
     return (
@@ -161,17 +231,30 @@ export default function TimeTrackerWidget() {
                 {user?.email || 'Not logged in'}
               </p>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsMinimized(true)}
-              className="h-8 w-8 p-0"
-            >
-              <X className="h-4 w-4" />
-            </Button>
+            <div className="flex gap-2">
+              {showInstallButton && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleInstallClick}
+                  className="h-8"
+                >
+                  <Download className="h-4 w-4 mr-1" />
+                  Install
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsMinimized(true)}
+                className="h-8 w-8 p-0"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
 
-          {/* Active Timer */}
+          {/* Active Timer - Only show when timer is running */}
           {activeTimer ? (
             <div className="mb-6 p-4 bg-green-50 border-2 border-green-200 rounded-lg">
               <div className="flex items-center justify-between mb-2">
@@ -198,45 +281,67 @@ export default function TimeTrackerWidget() {
               </Button>
             </div>
           ) : (
-            <div className="mb-6 p-4 bg-gray-50 border-2 border-gray-200 rounded-lg text-center">
-              <Clock className="h-12 w-12 mx-auto mb-2 text-gray-400" />
-              <p className="text-muted-foreground">No active timer</p>
+            /* Task Selection - Show when no timer is active */
+            <div className="mb-6">
+              <h2 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide">
+                Select Task to Track
+              </h2>
+              
+              {/* Search */}
+              <div className="relative mb-3">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search tasks..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+
+              {/* Task List */}
+              <ScrollArea className="h-[300px]">
+                <div className="space-y-2 pr-4">
+                  {availableTasks.length > 0 ? (
+                    availableTasks.map((task) => {
+                      const projectName = getProjectName(task);
+                      return (
+                        <Button
+                          key={task.id}
+                          variant="outline"
+                          className="w-full justify-start h-auto py-3 px-4"
+                          onClick={() => handleStartTimer(task.id)}
+                        >
+                          <Play className="h-4 w-4 mr-3 text-green-600 flex-shrink-0" />
+                          <div className="flex-1 text-left min-w-0">
+                            <div className="font-medium truncate">{task.title}</div>
+                            {projectName && (
+                              <div className="text-xs text-muted-foreground truncate">
+                                {projectName}
+                              </div>
+                            )}
+                            {task.status === 'in_progress' && (
+                              <Badge variant="secondary" className="mt-1 text-xs">
+                                In Progress
+                              </Badge>
+                            )}
+                          </div>
+                        </Button>
+                      );
+                    })
+                  ) : (
+                    <div className="text-center py-8">
+                      <Clock className="h-12 w-12 mx-auto mb-2 text-gray-400" />
+                      <p className="text-sm text-muted-foreground">
+                        {searchQuery 
+                          ? 'No tasks found matching your search'
+                          : 'No tasks available. Create tasks in the main app.'}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
             </div>
           )}
-
-          {/* Quick Start Tasks */}
-          <div>
-            <h2 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide">
-              Quick Start
-            </h2>
-            <div className="space-y-2">
-              {quickStartTasks.length > 0 ? (
-                quickStartTasks.map((task) => (
-                  <Button
-                    key={task.id}
-                    variant="outline"
-                    className="w-full justify-start h-auto py-3"
-                    onClick={() => handleStartTimer(task.id)}
-                    disabled={!!activeTimer}
-                  >
-                    <Play className="h-4 w-4 mr-2 text-green-600" />
-                    <div className="flex-1 text-left">
-                      <div className="font-medium">{task.title}</div>
-                      {task.projectId && (
-                        <div className="text-xs text-muted-foreground">
-                          {tasks.find(t => t.id === task.projectId)?.title || 'Project'}
-                        </div>
-                      )}
-                    </div>
-                  </Button>
-                ))
-              ) : (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  No tasks available. Create tasks in the main app.
-                </p>
-              )}
-            </div>
-          </div>
 
           {/* Footer */}
           <div className="mt-6 pt-4 border-t">
