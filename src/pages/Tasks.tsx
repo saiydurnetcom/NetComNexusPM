@@ -18,8 +18,8 @@ import { useTimeTracking } from '@/hooks/useTimeTracking';
 import { useToast } from '@/components/ui/use-toast';
 import { tasksService } from '@/lib/supabase-data';
 import { usersService } from '@/lib/users-service';
-import { Task, User } from '@/types';
-import { Plus, Search, Filter, Edit, Trash2, Calendar, Clock, ArrowUpDown, CheckCircle2, Circle, PlayCircle, User as UserIcon, FolderKanban, Play, Square } from 'lucide-react';
+import { Task, User, Tag } from '@/types';
+import { Plus, Search, Filter, Edit, Trash2, Calendar, Clock, ArrowUpDown, CheckCircle2, Circle, PlayCircle, User as UserIcon, FolderKanban, Play, Square, Tag as TagIcon } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function Tasks() {
@@ -30,6 +30,8 @@ export default function Tasks() {
   const { timeEntries, fetchTimeEntries, activeTimer, startTimer, stopTimer } = useTimeTracking();
   const { toast } = useToast();
   const [availableUsers, setAvailableUsers] = useState<User[]>([]);
+  const [availableTags, setAvailableTags] = useState<Tag[]>([]);
+  const [taskTags, setTaskTags] = useState<Record<string, Tag[]>>({});
   
   // Dialog states
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -44,6 +46,7 @@ export default function Tasks() {
     projectId: '',
     dueDate: '',
     estimatedHours: 0,
+    selectedTags: [] as string[],
   });
 
   // Filter and search state
@@ -60,11 +63,9 @@ export default function Tasks() {
         await fetchTasks();
         await fetchProjects();
         await fetchTimeEntries();
-        // Load users
-        const currentUser = await usersService.getCurrentUser();
-        if (currentUser) {
-          setAvailableUsers([currentUser]);
-        }
+        await loadUsers();
+        await loadTags();
+        await loadTaskTags();
       } catch (error) {
         console.error('Error loading data:', error);
         toast({
@@ -76,6 +77,56 @@ export default function Tasks() {
     };
     loadData();
   }, []);
+
+  const loadUsers = async () => {
+    try {
+      const users = await usersService.getUsers();
+      setAvailableUsers(users);
+    } catch (error) {
+      console.error('Error loading users:', error);
+      const currentUser = await usersService.getCurrentUser();
+      if (currentUser) {
+        setAvailableUsers([currentUser]);
+      }
+    }
+  };
+
+  const loadTags = async () => {
+    try {
+      const { supabase } = await import('@/lib/supabase');
+      const { data, error } = await supabase
+        .from('tags')
+        .select('*')
+        .order('name');
+      if (error) throw error;
+      setAvailableTags(data || []);
+    } catch (error) {
+      console.error('Error loading tags:', error);
+    }
+  };
+
+  const loadTaskTags = async () => {
+    try {
+      const { supabase } = await import('@/lib/supabase');
+      const { data, error } = await supabase
+        .from('task_tags')
+        .select('taskId, tagId, tags(*)');
+      if (error) throw error;
+      
+      const tagsByTask: Record<string, Tag[]> = {};
+      (data || []).forEach((tt: any) => {
+        if (!tagsByTask[tt.taskId]) {
+          tagsByTask[tt.taskId] = [];
+        }
+        if (tt.tags) {
+          tagsByTask[tt.taskId].push(tt.tags);
+        }
+      });
+      setTaskTags(tagsByTask);
+    } catch (error) {
+      console.error('Error loading task tags:', error);
+    }
+  };
 
   // Filtered and sorted tasks
   const filteredTasks = useMemo(() => {
@@ -131,7 +182,7 @@ export default function Tasks() {
     if (!taskForm.title.trim() || !user) return;
 
     try {
-      await createTask({
+      const task = await createTask({
         title: taskForm.title,
         description: taskForm.description,
         projectId: taskForm.projectId || undefined,
@@ -140,6 +191,17 @@ export default function Tasks() {
         assignedTo: user.id,
         dueDate: taskForm.dueDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
       });
+
+      // Add tags to task
+      if (taskForm.selectedTags.length > 0) {
+        const { supabase } = await import('@/lib/supabase');
+        const tagInserts = taskForm.selectedTags.map(tagId => ({
+          taskId: task.id,
+          tagId,
+        }));
+        await supabase.from('task_tags').insert(tagInserts);
+        await loadTaskTags();
+      }
       
       setTaskForm({
         title: '',
@@ -148,6 +210,7 @@ export default function Tasks() {
         projectId: '',
         dueDate: '',
         estimatedHours: 0,
+        selectedTags: [],
       });
       setIsCreateDialogOpen(false);
       await fetchTasks();
@@ -167,6 +230,7 @@ export default function Tasks() {
 
   const handleEditTask = (task: Task) => {
     setEditingTask(task);
+      const currentTags = taskTags[task.id] || [];
       setTaskForm({
         title: task.title,
         description: task.description || '',
@@ -174,6 +238,7 @@ export default function Tasks() {
         projectId: task.projectId || '',
         dueDate: task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '',
         estimatedHours: task.estimatedHours || 0,
+        selectedTags: currentTags.map(t => t.id),
       });
     setIsEditDialogOpen(true);
   };
@@ -198,6 +263,20 @@ export default function Tasks() {
         .eq('id', editingTask.id);
 
       if (error) throw error;
+
+      // Update tags
+      const { supabase } = await import('@/lib/supabase');
+      // Delete existing tags
+      await supabase.from('task_tags').delete().eq('taskId', editingTask.id);
+      // Insert new tags
+      if (taskForm.selectedTags.length > 0) {
+        const tagInserts = taskForm.selectedTags.map(tagId => ({
+          taskId: editingTask.id,
+          tagId,
+        }));
+        await supabase.from('task_tags').insert(tagInserts);
+      }
+      await loadTaskTags();
 
       setIsEditDialogOpen(false);
       setEditingTask(null);
@@ -434,16 +513,34 @@ export default function Tasks() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="estimatedHours">Estimated Hours</Label>
-                    <Input
-                      id="estimatedHours"
-                      type="number"
-                      min="0"
-                      step="0.5"
-                      value={taskForm.estimatedHours}
-                      onChange={(e) => setTaskForm({ ...taskForm, estimatedHours: parseFloat(e.target.value) || 0 })}
-                      placeholder="0"
-                    />
+                    <Label>Tags</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {availableTags.map(tag => (
+                        <Button
+                          key={tag.id}
+                          type="button"
+                          variant={taskForm.selectedTags.includes(tag.id) ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => {
+                            if (taskForm.selectedTags.includes(tag.id)) {
+                              setTaskForm({
+                                ...taskForm,
+                                selectedTags: taskForm.selectedTags.filter(id => id !== tag.id),
+                              });
+                            } else {
+                              setTaskForm({
+                                ...taskForm,
+                                selectedTags: [...taskForm.selectedTags, tag.id],
+                              });
+                            }
+                          }}
+                          style={taskForm.selectedTags.includes(tag.id) ? { backgroundColor: tag.color, borderColor: tag.color } : {}}
+                        >
+                          <TagIcon className="h-3 w-3 mr-1" />
+                          {tag.name}
+                        </Button>
+                      ))}
+                    </div>
                   </div>
                   <div className="flex justify-end gap-2">
                     <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
@@ -666,6 +763,7 @@ export default function Tasks() {
                     ? Math.min(100, (totalTime / (task.estimatedHours * 60)) * 100)
                     : 0;
                   const isTaskTimerActive = activeTimer?.taskId === task.id;
+                  const currentTaskTags = taskTags[task.id] || [];
                   
                   return (
                     <Card
@@ -683,6 +781,16 @@ export default function Tasks() {
                               <CardDescription className="line-clamp-2 text-sm">
                                 {task.description}
                               </CardDescription>
+                            )}
+                            {currentTaskTags.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-2">
+                                {currentTaskTags.map(tag => (
+                                  <Badge key={tag.id} variant="outline" className="text-xs" style={{ borderColor: tag.color, color: tag.color }}>
+                                    <TagIcon className="h-2 w-2 mr-1" />
+                                    {tag.name}
+                                  </Badge>
+                                ))}
+                              </div>
                             )}
                           </div>
                           <div className="flex items-center gap-1 flex-shrink-0">
@@ -939,6 +1047,36 @@ export default function Tasks() {
                     value={taskForm.estimatedHours}
                     onChange={(e) => setTaskForm({ ...taskForm, estimatedHours: parseFloat(e.target.value) || 0 })}
                   />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Tags</Label>
+                <div className="flex flex-wrap gap-2">
+                  {availableTags.map(tag => (
+                    <Button
+                      key={tag.id}
+                      type="button"
+                      variant={taskForm.selectedTags.includes(tag.id) ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => {
+                        if (taskForm.selectedTags.includes(tag.id)) {
+                          setTaskForm({
+                            ...taskForm,
+                            selectedTags: taskForm.selectedTags.filter(id => id !== tag.id),
+                          });
+                        } else {
+                          setTaskForm({
+                            ...taskForm,
+                            selectedTags: [...taskForm.selectedTags, tag.id],
+                          });
+                        }
+                      }}
+                      style={taskForm.selectedTags.includes(tag.id) ? { backgroundColor: tag.color, borderColor: tag.color } : {}}
+                    >
+                      <TagIcon className="h-3 w-3 mr-1" />
+                      {tag.name}
+                    </Button>
+                  ))}
                 </div>
               </div>
               <div className="flex justify-end gap-2">

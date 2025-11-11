@@ -10,7 +10,7 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Projects from './pages/Projects';
 import ProjectDetail from './pages/ProjectDetail';
-import TimeTracking from './pages/TimeTracking';
+import Timesheet from './pages/Timesheet';
 import MeetingProcessor from './pages/MeetingProcessor';
 import Tasks from './pages/Tasks';
 import TaskDetail from './pages/TaskDetail';
@@ -33,7 +33,7 @@ const App = () => (
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
           <Route path="/projects/:id" element={<ProtectedRoute><ProjectDetail /></ProtectedRoute>} />
-          <Route path="/time-tracking" element={<ProtectedRoute><TimeTracking /></ProtectedRoute>} />
+          <Route path="/timesheet" element={<ProtectedRoute><Timesheet /></ProtectedRoute>} />
           <Route path="/meeting-processor" element={<ProtectedRoute><MeetingProcessor /></ProtectedRoute>} />
           <Route path="/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
           <Route path="/tasks/:id" element={<ProtectedRoute><TaskDetail /></ProtectedRoute>} />

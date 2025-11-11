@@ -23,7 +23,7 @@ export default function Sidebar() {
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/projects', label: 'Projects', icon: FolderKanban },
     { path: '/tasks', label: 'Tasks', icon: CheckSquare },
-    { path: '/time-tracking', label: 'Time Tracking', icon: Clock },
+    { path: '/timesheet', label: 'Timesheet', icon: Clock },
     { path: '/meetings', label: 'Meetings', icon: Sparkles },
   ];
 

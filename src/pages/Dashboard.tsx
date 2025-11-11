@@ -103,7 +103,7 @@ export default function Dashboard() {
             {activeTimer ? (
               <Button 
                 variant="outline" 
-                onClick={() => navigate('/time-tracking')}
+                onClick={() => navigate('/timesheet')}
                 className="gap-2"
               >
                 <Clock className="h-4 w-4" />
@@ -111,7 +111,7 @@ export default function Dashboard() {
               </Button>
             ) : (
               <Button 
-                onClick={() => navigate('/time-tracking')}
+                onClick={() => navigate('/timesheet')}
                 className="gap-2 bg-blue-600 hover:bg-blue-700"
               >
                 <Play className="h-4 w-4" />
@@ -191,7 +191,7 @@ export default function Dashboard() {
                 <Button 
                   variant="ghost" 
                   size="sm"
-                  onClick={() => navigate('/time-tracking')}
+                  onClick={() => navigate('/timesheet')}
                   className="text-blue-600 hover:text-blue-700"
                 >
                   View All
@@ -247,7 +247,7 @@ export default function Dashboard() {
                     variant="outline" 
                     size="sm" 
                     className="mt-3"
-                    onClick={() => navigate('/time-tracking')}
+                    onClick={() => navigate('/timesheet')}
                   >
                     Start Tracking
                   </Button>

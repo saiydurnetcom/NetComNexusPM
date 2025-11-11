@@ -8,7 +8,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import AppLayout from '@/components/AppLayout';
 import { useToast } from '@/components/ui/use-toast';
 import { useProjects } from '@/hooks/useProjects';
-import { Plus, Search, Calendar, Users } from 'lucide-react';
+import { Plus, Search, Calendar, Users, Tag as TagIcon } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Tag } from '@/types';
 
 export default function Projects() {
   const navigate = useNavigate();
@@ -18,14 +21,61 @@ export default function Projects() {
   const [newProject, setNewProject] = useState({
     name: '',
     description: '',
+    purpose: '',
     startDate: new Date().toISOString().split('T')[0],
     endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    selectedTags: [] as string[],
   });
+  const [availableTags, setAvailableTags] = useState<Tag[]>([]);
+  const [projectTags, setProjectTags] = useState<Record<string, Tag[]>>({});
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   useEffect(() => {
-    fetchProjects();
-  }, [fetchProjects]);
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    await fetchProjects();
+    await loadTags();
+    await loadProjectTags();
+  };
+
+  const loadTags = async () => {
+    try {
+      const { supabase } = await import('@/lib/supabase');
+      const { data, error } = await supabase
+        .from('tags')
+        .select('*')
+        .order('name');
+      if (error) throw error;
+      setAvailableTags(data || []);
+    } catch (error) {
+      console.error('Error loading tags:', error);
+    }
+  };
+
+  const loadProjectTags = async () => {
+    try {
+      const { supabase } = await import('@/lib/supabase');
+      const { data, error } = await supabase
+        .from('project_tags')
+        .select('projectId, tagId, tags(*)');
+      if (error) throw error;
+      
+      const tagsByProject: Record<string, Tag[]> = {};
+      (data || []).forEach((pt: any) => {
+        if (!tagsByProject[pt.projectId]) {
+          tagsByProject[pt.projectId] = [];
+        }
+        if (pt.tags) {
+          tagsByProject[pt.projectId].push(pt.tags);
+        }
+      });
+      setProjectTags(tagsByProject);
+    } catch (error) {
+      console.error('Error loading project tags:', error);
+    }
+  };
 
   const filteredProjects = projects.filter(project =>
     project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -35,17 +85,40 @@ export default function Projects() {
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await createProject({
+      const project = await createProject({
         name: newProject.name,
         description: newProject.description,
         startDate: newProject.startDate,
         endDate: newProject.endDate,
       });
+
+      // Add purpose if provided
+      if (newProject.purpose) {
+        const { supabase } = await import('@/lib/supabase');
+        await supabase
+          .from('projects')
+          .update({ purpose: newProject.purpose })
+          .eq('id', project.id);
+      }
+
+      // Add tags to project
+      if (newProject.selectedTags.length > 0) {
+        const { supabase } = await import('@/lib/supabase');
+        const tagInserts = newProject.selectedTags.map(tagId => ({
+          projectId: project.id,
+          tagId,
+        }));
+        await supabase.from('project_tags').insert(tagInserts);
+        await loadProjectTags();
+      }
+
       setNewProject({
         name: '',
         description: '',
+        purpose: '',
         startDate: new Date().toISOString().split('T')[0],
         endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        selectedTags: [],
       });
       setIsDialogOpen(false);
       // Refresh projects list
@@ -105,15 +178,27 @@ export default function Projects() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Description</label>
-                  <Input
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea
+                    id="description"
                     value={newProject.description}
                     onChange={(e) => setNewProject({ ...newProject, description: e.target.value })}
                     placeholder="Enter project description"
+                    rows={3}
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Start Date</label>
+                  <Label htmlFor="purpose">Purpose</Label>
+                  <Textarea
+                    id="purpose"
+                    value={newProject.purpose}
+                    onChange={(e) => setNewProject({ ...newProject, purpose: e.target.value })}
+                    placeholder="What is the purpose of this project?"
+                    rows={3}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="startDate">Start Date</Label>
                   <Input
                     type="date"
                     value={newProject.startDate}
@@ -122,13 +207,44 @@ export default function Projects() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">End Date</label>
+                  <Label htmlFor="endDate">End Date</Label>
                   <Input
+                    id="endDate"
                     type="date"
                     value={newProject.endDate}
                     onChange={(e) => setNewProject({ ...newProject, endDate: e.target.value })}
                     required
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label>Tags</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {availableTags.map(tag => (
+                      <Button
+                        key={tag.id}
+                        type="button"
+                        variant={newProject.selectedTags.includes(tag.id) ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => {
+                          if (newProject.selectedTags.includes(tag.id)) {
+                            setNewProject({
+                              ...newProject,
+                              selectedTags: newProject.selectedTags.filter(id => id !== tag.id),
+                            });
+                          } else {
+                            setNewProject({
+                              ...newProject,
+                              selectedTags: [...newProject.selectedTags, tag.id],
+                            });
+                          }
+                        }}
+                        style={newProject.selectedTags.includes(tag.id) ? { backgroundColor: tag.color, borderColor: tag.color } : {}}
+                      >
+                        <TagIcon className="h-3 w-3 mr-1" />
+                        {tag.name}
+                      </Button>
+                    ))}
+                  </div>
                 </div>
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? 'Creating...' : 'Create Project'}
@@ -174,6 +290,7 @@ export default function Projects() {
               const endDate = new Date(project.endDate);
               const daysUntilDeadline = Math.ceil((endDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
               const isApproachingDeadline = daysUntilDeadline <= 7 && daysUntilDeadline > 0;
+              const currentProjectTags = projectTags[project.id] || [];
               
               return (
                 <Card 
@@ -190,6 +307,16 @@ export default function Projects() {
                         <CardDescription className="line-clamp-2">
                           {project.description || 'No description'}
                         </CardDescription>
+                        {currentProjectTags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {currentProjectTags.map(tag => (
+                              <Badge key={tag.id} variant="outline" className="text-xs" style={{ borderColor: tag.color, color: tag.color }}>
+                                <TagIcon className="h-2 w-2 mr-1" />
+                                {tag.name}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </CardHeader>
