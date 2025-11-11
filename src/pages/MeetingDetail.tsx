@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AppLayout from '@/components/AppLayout';
 import { useMeetings } from '@/hooks/useMeetings';
 import { useProjects } from '@/hooks/useProjects';
@@ -208,9 +209,12 @@ export default function MeetingDetail() {
     const defaultDueDate = new Date();
     defaultDueDate.setDate(defaultDueDate.getDate() + 7); // Default to 7 days from now
     
+    // Use AI-generated description if available, otherwise fall back to originalText
+    const defaultDescription = (suggestion as any).suggestedDescription || suggestion.originalText;
+    
     setApprovalForm({
       title: suggestion.suggestedTask,
-      description: suggestion.originalText,
+      description: defaultDescription,
       projectId: meeting?.projectId || '',
       priority: 'medium',
       assignedTo: currentUser?.id || '',
@@ -490,7 +494,7 @@ export default function MeetingDetail() {
               </Card>
             )}
 
-            {/* All Suggestions */}
+            {/* All Suggestions with Tabs */}
             {suggestions.length > 0 && (
               <Card>
                 <CardHeader>
@@ -499,91 +503,286 @@ export default function MeetingDetail() {
                     Review all task suggestions generated from this meeting
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  {suggestions.map((suggestion) => (
-                    <Card 
-                      key={suggestion.id} 
-                      className={`border-2 transition-all hover:shadow-md ${
-                        suggestion.status === 'approved' 
-                          ? 'border-green-200 bg-green-50/30' 
-                          : suggestion.status === 'rejected'
-                          ? 'border-red-200 bg-red-50/30'
-                          : 'border-yellow-200 bg-yellow-50/30 cursor-pointer hover:border-yellow-300'
-                      }`}
-                    >
-                      <CardContent className="p-4">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1 space-y-2">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              {getStatusIcon(suggestion.status)}
-                              <h4 className="font-semibold">{suggestion.suggestedTask}</h4>
-                              <Badge 
-                                variant={getStatusColor(suggestion.status)}
-                                className={
-                                  suggestion.status === 'approved' 
-                                    ? 'bg-green-600 text-white'
-                                    : suggestion.status === 'rejected'
-                                    ? 'bg-red-600 text-white'
-                                    : 'bg-yellow-500 text-white'
-                                }
-                              >
-                                {suggestion.status}
-                              </Badge>
-                            </div>
-                            <p className="text-sm text-muted-foreground">
-                              {suggestion.originalText}
-                            </p>
-                            <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                              <span>Confidence: {(suggestion.confidenceScore * 100).toFixed(0)}%</span>
-                              {suggestion.reviewedAt && (
-                                <span>
-                                  Reviewed: {format(new Date(suggestion.reviewedAt), 'MMM dd, yyyy')}
-                                </span>
-                              )}
-                            </div>
-                            {suggestion.rejectionReason && (
-                              <div className="text-sm text-red-600 bg-red-50 p-2 rounded">
-                                <strong>Rejection Reason:</strong> {suggestion.rejectionReason}
-                              </div>
-                            )}
-                          </div>
-                          {suggestion.status === 'pending' && (
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleEditClick(suggestion)}
-                                title="Edit and approve"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleRejectClick(suggestion)}
-                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                title="Reject suggestion"
-                              >
-                                <XCircle className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                onClick={() => handleApproveClick(suggestion)}
-                                className="bg-green-600 hover:bg-green-700"
-                                title="Approve suggestion"
-                              >
-                                <CheckCircle2 className="h-4 w-4 mr-1" />
-                                Approve
-                              </Button>
-                            </div>
-                          )}
+                <CardContent>
+                  <Tabs defaultValue="pending" className="w-full">
+                    <TabsList className="grid w-full grid-cols-3">
+                      <TabsTrigger value="pending">
+                        Pending ({pendingSuggestions.length})
+                      </TabsTrigger>
+                      <TabsTrigger value="approved">
+                        Approved ({approvedSuggestions.length})
+                      </TabsTrigger>
+                      <TabsTrigger value="rejected">
+                        Rejected ({rejectedSuggestions.length})
+                      </TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="pending" className="space-y-4 mt-4">
+                      {pendingSuggestions.length === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <p>No pending suggestions</p>
                         </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                      ) : (
+                        pendingSuggestions.map((suggestion) => (
+                          <SuggestionCard 
+                            key={suggestion.id} 
+                            suggestion={suggestion}
+                            onApprove={handleApproveClick}
+                            onReject={handleRejectClick}
+                            onEdit={handleEditClick}
+                          />
+                        ))
+                      )}
+                    </TabsContent>
+                    <TabsContent value="approved" className="space-y-4 mt-4">
+                      {approvedSuggestions.length === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <p>No approved suggestions</p>
+                        </div>
+                      ) : (
+                        approvedSuggestions.map((suggestion) => (
+                          <SuggestionCard 
+                            key={suggestion.id} 
+                            suggestion={suggestion}
+                            onApprove={handleApproveClick}
+                            onReject={handleRejectClick}
+                            onEdit={handleEditClick}
+                          />
+                        ))
+                      )}
+                    </TabsContent>
+                    <TabsContent value="rejected" className="space-y-4 mt-4">
+                      {rejectedSuggestions.length === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <p>No rejected suggestions</p>
+                        </div>
+                      ) : (
+                        rejectedSuggestions.map((suggestion) => (
+                          <SuggestionCard 
+                            key={suggestion.id} 
+                            suggestion={suggestion}
+                            onApprove={handleApproveClick}
+                            onReject={handleRejectClick}
+                            onEdit={handleEditClick}
+                          />
+                        ))
+                      )}
+                    </TabsContent>
+                  </Tabs>
                 </CardContent>
               </Card>
             )}
+          </div>
+
+          {/* Sidebar */}
+          <div className="space-y-6">
+            {/* Quick Actions */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Quick Actions</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <Button
+                  variant="default"
+                  className="w-full justify-start bg-blue-600 hover:bg-blue-700"
+                  onClick={handleReprocessMeeting}
+                  disabled={isReprocessingMeeting || isReprocessing}
+                >
+                  {isReprocessingMeeting || isReprocessing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Reprocessing...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4 mr-2" />
+                      Reprocess with AI
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => navigate('/meeting-processor')}
+                >
+                  Process New Meeting
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => navigate('/meetings')}
+                >
+                  View All Meetings
+                </Button>
+                {project && (
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start"
+                    onClick={() => navigate(`/projects/${project.id}`)}
+                  >
+                    View Project
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Meeting Info */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Meeting Information</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">Meeting Date</div>
+                  <div className="text-sm">
+                    {format(new Date(meeting.meetingDate), 'MMMM dd, yyyy')}
+                  </div>
+                </div>
+                <Separator />
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">Created</div>
+                  <div className="text-sm">
+                    {format(new Date(meeting.createdAt), 'MMM dd, yyyy h:mm a')}
+                  </div>
+                </div>
+                {project && (
+                  <>
+                    <Separator />
+                    <div>
+                      <div className="text-xs text-muted-foreground mb-1">Project</div>
+                      <Button
+                        variant="link"
+                        className="p-0 h-auto"
+                        onClick={() => navigate(`/projects/${project.id}`)}
+                      >
+                        {project.name}
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </AppLayout>
+  );
+}
+
+// Suggestion Card Component - uses handlers from parent
+function SuggestionCard({ 
+  suggestion, 
+  onApprove, 
+  onReject, 
+  onEdit 
+}: { 
+  suggestion: AISuggestion;
+  onApprove: (s: AISuggestion) => void;
+  onReject: (s: AISuggestion) => void;
+  onEdit: (s: AISuggestion) => void;
+}) {
+  const getStatusIcon = (status: AISuggestion['status']) => {
+    switch (status) {
+      case 'approved':
+        return <CheckCircle2 className="h-5 w-5 text-green-600" />;
+      case 'rejected':
+        return <XCircle className="h-5 w-5 text-red-600" />;
+      default:
+        return <Circle className="h-5 w-5 text-yellow-500" />;
+    }
+  };
+
+  const getStatusColor = (status: AISuggestion['status']) => {
+    switch (status) {
+      case 'approved':
+        return 'default';
+      case 'rejected':
+        return 'destructive';
+      default:
+        return 'secondary';
+    }
+  };
+
+  return (
+    <Card 
+      className={`border-2 transition-all hover:shadow-md ${
+        suggestion.status === 'approved' 
+          ? 'border-green-200 bg-green-50/30' 
+          : suggestion.status === 'rejected'
+          ? 'border-red-200 bg-red-50/30'
+          : 'border-yellow-200 bg-yellow-50/30 cursor-pointer hover:border-yellow-300'
+      }`}
+    >
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 space-y-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              {getStatusIcon(suggestion.status)}
+              <h4 className="font-semibold">{suggestion.suggestedTask}</h4>
+              <Badge 
+                variant={getStatusColor(suggestion.status)}
+                className={
+                  suggestion.status === 'approved' 
+                    ? 'bg-green-600 text-white'
+                    : suggestion.status === 'rejected'
+                    ? 'bg-red-600 text-white'
+                    : 'bg-yellow-500 text-white'
+                }
+              >
+                {suggestion.status}
+              </Badge>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {suggestion.originalText}
+            </p>
+            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+              <span>Confidence: {(suggestion.confidenceScore * 100).toFixed(0)}%</span>
+              {suggestion.reviewedAt && (
+                <span>
+                  Reviewed: {format(new Date(suggestion.reviewedAt), 'MMM dd, yyyy')}
+                </span>
+              )}
+            </div>
+            {suggestion.rejectionReason && (
+              <div className="text-sm text-red-600 bg-red-50 p-2 rounded">
+                <strong>Rejection Reason:</strong> {suggestion.rejectionReason}
+              </div>
+            )}
+          </div>
+          {suggestion.status === 'pending' && (
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onEdit(suggestion)}
+                title="Edit and approve"
+              >
+                <Edit className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onReject(suggestion)}
+                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                title="Reject suggestion"
+              >
+                <XCircle className="h-4 w-4" />
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => onApprove(suggestion)}
+                className="bg-green-600 hover:bg-green-700"
+                title="Approve suggestion"
+              >
+                <CheckCircle2 className="h-4 w-4 mr-1" />
+                Approve
+              </Button>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
           </div>
 
           {/* Sidebar */}

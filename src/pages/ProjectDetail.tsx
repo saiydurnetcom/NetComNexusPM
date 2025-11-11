@@ -7,9 +7,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/components/AppLayout';
 import { useTasks } from '@/hooks/useTasks';
 import { useProjects } from '@/hooks/useProjects';
@@ -17,6 +18,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useTimeTracking } from '@/hooks/useTimeTracking';
 import { useToast } from '@/components/ui/use-toast';
 import { usersService } from '@/lib/users-service';
+import { adminService } from '@/lib/admin-service';
 import { Task, Project, User, Tag } from '@/types';
 import { TagSelector } from '@/components/TagSelector';
 import { 
@@ -37,7 +39,8 @@ import {
   Users,
   Target,
   ArrowLeft,
-  Square
+  Square,
+  Trash2
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -83,6 +86,10 @@ export default function ProjectDetail() {
 
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [projectTasks, setProjectTasks] = useState<Task[]>([]);
+  const [projectMembers, setProjectMembers] = useState<Array<User & { role: string; addedBy: string; createdAt: string }>>([]);
+  const [isMemberDialogOpen, setIsMemberDialogOpen] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState('');
+  const [memberRole, setMemberRole] = useState<'owner' | 'member' | 'viewer'>('member');
 
   useEffect(() => {
     loadData();
@@ -97,6 +104,7 @@ export default function ProjectDetail() {
       await loadUsers();
       await loadTags();
       await loadProjectTags();
+      await loadProjectMembers();
     } catch (error) {
       console.error('Error loading data:', error);
     }
@@ -131,6 +139,74 @@ export default function ProjectDetail() {
     } catch (error) {
       console.error('Error loading tags:', error);
       setAvailableTags([]);
+    }
+  };
+
+  const loadProjectMembers = async () => {
+    if (!id) return;
+    try {
+      const members = await adminService.getProjectMembers(id);
+      setProjectMembers(members);
+    } catch (error) {
+      console.error('Error loading project members:', error);
+      setProjectMembers([]);
+    }
+  };
+
+  const handleAddMember = async () => {
+    if (!id || !selectedUserId) return;
+    try {
+      await adminService.addProjectMember(id, selectedUserId, memberRole);
+      await loadProjectMembers();
+      setIsMemberDialogOpen(false);
+      setSelectedUserId('');
+      setMemberRole('member');
+      toast({
+        title: 'Success',
+        description: 'Member added to project',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to add member',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleRemoveMember = async (userId: string) => {
+    if (!id) return;
+    try {
+      await adminService.removeProjectMember(id, userId);
+      await loadProjectMembers();
+      toast({
+        title: 'Success',
+        description: 'Member removed from project',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to remove member',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleUpdateMemberRole = async (userId: string, newRole: 'owner' | 'member' | 'viewer') => {
+    if (!id) return;
+    try {
+      await adminService.updateProjectMemberRole(id, userId, newRole);
+      await loadProjectMembers();
+      toast({
+        title: 'Success',
+        description: 'Member role updated',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to update role',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -599,6 +675,140 @@ export default function ProjectDetail() {
             </Tabs>
         </CardContent>
       </Card>
+
+        {/* Project Members */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Project Members</CardTitle>
+                <CardDescription>Manage who can view and collaborate on this project</CardDescription>
+              </div>
+              {(user?.role === 'admin' || currentProject?.createdBy === user?.id) && (
+                <Button onClick={() => setIsMemberDialogOpen(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Member
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {projectMembers.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Users className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                <p className="text-sm">No members added yet</p>
+                {(user?.role === 'admin' || currentProject?.createdBy === user?.id) && (
+                  <Button variant="outline" size="sm" className="mt-3" onClick={() => setIsMemberDialogOpen(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add First Member
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {projectMembers.map((member) => (
+                    <TableRow key={member.id}>
+                      <TableCell>{member.firstName} {member.lastName}</TableCell>
+                      <TableCell>{member.email}</TableCell>
+                      <TableCell>
+                        {(user?.role === 'admin' || currentProject?.createdBy === user?.id) ? (
+                          <Select
+                            value={member.role}
+                            onValueChange={(value: 'owner' | 'member' | 'viewer') => handleUpdateMemberRole(member.id, value)}
+                          >
+                            <SelectTrigger className="w-32">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="owner">Owner</SelectItem>
+                              <SelectItem value="member">Member</SelectItem>
+                              <SelectItem value="viewer">Viewer</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Badge variant="outline">{member.role}</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {(user?.role === 'admin' || currentProject?.createdBy === user?.id) && member.id !== user?.id && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveMember(member.id)}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Add Member Dialog */}
+        <Dialog open={isMemberDialogOpen} onOpenChange={setIsMemberDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add Project Member</DialogTitle>
+              <DialogDescription>
+                Select a user to add to this project
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="member-user">User</Label>
+                <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a user" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableUsers
+                      .filter(u => !projectMembers.find(pm => pm.id === u.id))
+                      .map((u) => (
+                        <SelectItem key={u.id} value={u.id}>
+                          {u.firstName} {u.lastName} ({u.email})
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="member-role">Role</Label>
+                <Select value={memberRole} onValueChange={(value: 'owner' | 'member' | 'viewer') => setMemberRole(value)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="owner">Owner - Full access</SelectItem>
+                    <SelectItem value="member">Member - Can edit</SelectItem>
+                    <SelectItem value="viewer">Viewer - Read only</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsMemberDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleAddMember} disabled={!selectedUserId}>
+                Add Member
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

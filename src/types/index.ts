@@ -76,6 +76,7 @@ export interface AISuggestion {
   meetingId: string;
   originalText: string;
   suggestedTask: string;
+  suggestedDescription?: string | null; // AI-generated intelligent description
   confidenceScore: number;
   status: 'pending' | 'approved' | 'rejected';
   reviewedBy: string | null;

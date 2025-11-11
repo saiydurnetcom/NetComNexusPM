@@ -332,5 +332,86 @@ export const adminService = {
       });
     if (error) throw error;
   },
+
+  // Project Members
+  async getProjectMembers(projectId: string): Promise<Array<User & { role: string; addedBy: string; createdAt: string }>> {
+    try {
+      const { data, error } = await supabase
+        .from('project_members')
+        .select(`
+          *,
+          users:userId (
+            id,
+            email,
+            firstName,
+            lastName,
+            role,
+            isActive
+          )
+        `)
+        .eq('projectId', projectId)
+        .order('createdAt', { ascending: false });
+      
+      if (error) {
+        if (error.code === '42P01' || error.code === 'PGRST202' || error.message?.includes('does not exist')) {
+          console.warn('Project members table does not exist. Please run the migration.');
+          return [];
+        }
+        throw error;
+      }
+      
+      // Transform the data to flatten the user object
+      return (data || []).map((pm: any) => ({
+        ...pm.users,
+        role: pm.role,
+        addedBy: pm.addedBy,
+        createdAt: pm.createdAt,
+      }));
+    } catch (error) {
+      console.error('Error fetching project members:', error);
+      return [];
+    }
+  },
+
+  async addProjectMember(projectId: string, userId: string, role: 'owner' | 'member' | 'viewer' = 'member'): Promise<void> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { error } = await supabase
+      .from('project_members')
+      .insert({
+        projectId,
+        userId,
+        role,
+        addedBy: user.id,
+      });
+    
+    if (error) {
+      if (error.code === '23505') { // Unique constraint violation
+        throw new Error('User is already a member of this project');
+      }
+      throw error;
+    }
+  },
+
+  async removeProjectMember(projectId: string, userId: string): Promise<void> {
+    const { error } = await supabase
+      .from('project_members')
+      .delete()
+      .eq('projectId', projectId)
+      .eq('userId', userId);
+    
+    if (error) throw error;
+  },
+
+  async updateProjectMemberRole(projectId: string, userId: string, role: 'owner' | 'member' | 'viewer'): Promise<void> {
+    const { error } = await supabase
+      .from('project_members')
+      .update({ role })
+      .eq('projectId', projectId)
+      .eq('userId', userId);
+    
+    if (error) throw error;
+  },
 };
 

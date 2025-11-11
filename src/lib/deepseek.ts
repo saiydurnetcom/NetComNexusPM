@@ -110,6 +110,7 @@ When existing tasks are provided, analyze their INTENT and PURPOSE. Only suggest
 Return a JSON object with a "suggestions" array, each containing:
 - originalText: The exact excerpt from notes that led to this suggestion (quote directly)
 - suggestedTask: A concise, specific, actionable task title (8-12 words, action verb first)
+- suggestedDescription: A detailed, intelligent description (2-4 sentences) that explains WHAT needs to be done, WHY it's important, and HOW to approach it. This should be contextually relevant to the task title, not just a copy of the originalText.
 - confidenceScore: 0.0-1.0 indicating confidence this is a new, unique, actionable task`
 
           : `You are an intelligent task extraction and refinement assistant. Your role is to:
@@ -148,6 +149,7 @@ Refined: "Schedule weekly team standup meeting for project status updates"
 Return a JSON object with a "suggestions" array containing detailed, actionable tasks. Each suggestion must contain:
 - originalText: The exact excerpt from notes that led to this suggestion (quote directly from notes)
 - suggestedTask: A refined, specific, actionable task title (8-12 words, action verb first)
+- suggestedDescription: A detailed, intelligent description (2-4 sentences) that explains WHAT needs to be done, WHY it's important, and HOW to approach it. This should be contextually relevant to the task title, not just a copy of the originalText.
 - confidenceScore: 0.0-1.0 indicating confidence this is a clear, actionable task`
 
         const userPrompt = existingTasks && existingTasks.length > 0
@@ -183,7 +185,7 @@ Each suggested task should:
 
 Return a JSON object with a "suggestions" array containing ONLY new, detailed, actionable tasks.
 Minimum 3 suggestions, but extract all genuine tasks from the notes.
-Format: {"suggestions": [{"originalText": "[exact quote from notes]", "suggestedTask": "[refined actionable task]", "confidenceScore": 0.8}, ...]}
+Format: {"suggestions": [{"originalText": "[exact quote from notes]", "suggestedTask": "[refined actionable task]", "suggestedDescription": "[intelligent 2-4 sentence description]", "confidenceScore": 0.8}, ...]}
 
 If all tasks are already covered, return an empty suggestions array: {"suggestions": []}`
 
@@ -215,7 +217,7 @@ Each suggested task should:
 
 Return a JSON object with a "suggestions" array containing at least 3 refined task suggestions.
 Extract all genuine tasks from the notes - don't limit yourself if there are more.
-Format: {"suggestions": [{"originalText": "[exact quote from notes]", "suggestedTask": "[refined actionable task]", "confidenceScore": 0.8}, ...]}`;
+Format: {"suggestions": [{"originalText": "[exact quote from notes]", "suggestedTask": "[refined actionable task]", "suggestedDescription": "[intelligent 2-4 sentence description]", "confidenceScore": 0.8}, ...]}`;
 
         const requestBody = {
           model: model,
@@ -321,6 +323,7 @@ Format: {"suggestions": [{"originalText": "[exact quote from notes]", "suggested
         suggestions = suggestions.map(s => ({
           originalText: s.originalText || notes.substring(0, 100),
           suggestedTask: s.suggestedTask || 'Review meeting notes',
+          suggestedDescription: s.suggestedDescription || `Complete the task: ${s.suggestedTask || 'Review meeting notes'}. This task requires attention to detail and should be completed according to the project requirements.`,
           confidenceScore: typeof s.confidenceScore === 'number' ? Math.max(0, Math.min(1, s.confidenceScore)) : 0.8,
         }));
 
@@ -328,6 +331,7 @@ Format: {"suggestions": [{"originalText": "[exact quote from notes]", "suggested
         return suggestions.map((s) => ({
           originalText: s.originalText,
           suggestedTask: s.suggestedTask,
+          suggestedDescription: s.suggestedDescription,
           confidenceScore: s.confidenceScore,
           status: 'pending' as const,
         }));

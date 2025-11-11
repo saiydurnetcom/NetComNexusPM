@@ -517,10 +517,12 @@ export const aiSuggestionsService = {
       : projectId;
 
     // Create task from suggestion (projectId is optional)
+    // Use AI-generated description if available, otherwise fall back to originalText
+    const defaultDescription = (suggestion as any).suggestedDescription || suggestion.originalText;
     const taskData: TaskCreateData = {
       projectId: finalProjectId,
       title: modifications?.title || suggestion.suggestedTask,
-      description: modifications?.description || suggestion.originalText,
+      description: modifications?.description || defaultDescription,
       priority: modifications?.priority || 'medium',
       estimatedHours: modifications?.estimatedHours || 1,
       assignedTo: modifications?.assignedTo || user.id,
