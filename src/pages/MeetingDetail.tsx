@@ -4,13 +4,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/components/AppLayout';
 import { useMeetings } from '@/hooks/useMeetings';
 import { useProjects } from '@/hooks/useProjects';
 import { useTasks } from '@/hooks/useTasks';
 import { useAISuggestions } from '@/hooks/useAISuggestions';
 import { useToast } from '@/components/ui/use-toast';
-import { Meeting, AISuggestion, Task } from '@/types';
+import { Meeting, AISuggestion, Task, TaskCreateData } from '@/types';
 import { 
   Calendar, 
   Clock, 
@@ -22,7 +27,9 @@ import {
   FolderKanban,
   AlertCircle,
   Sparkles,
-  Loader2
+  Loader2,
+  Edit,
+  Trash2
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -32,13 +39,34 @@ export default function MeetingDetail() {
   const { getMeeting, getMeetingSuggestions, isLoading, error } = useMeetings();
   const { projects, fetchProjects } = useProjects();
   const { tasks, fetchTasks } = useTasks();
-  const { reprocessMeeting, isLoading: isReprocessing } = useAISuggestions();
+  const { reprocessMeeting, approveSuggestion, rejectSuggestion, isLoading: isReprocessing } = useAISuggestions();
   const { toast } = useToast();
 
   const [meeting, setMeeting] = useState<Meeting | null>(null);
   const [suggestions, setSuggestions] = useState<AISuggestion[]>([]);
   const [tasksFromMeeting, setTasksFromMeeting] = useState<Task[]>([]);
   const [isReprocessingMeeting, setIsReprocessingMeeting] = useState(false);
+  
+  // Dialog states
+  const [approvingSuggestion, setApprovingSuggestion] = useState<AISuggestion | null>(null);
+  const [rejectingSuggestion, setRejectingSuggestion] = useState<AISuggestion | null>(null);
+  const [editingSuggestion, setEditingSuggestion] = useState<AISuggestion | null>(null);
+  
+  // Form states for approval
+  const [approvalForm, setApprovalForm] = useState<{
+    title: string;
+    description: string;
+    projectId: string;
+    priority: 'low' | 'medium' | 'high' | 'urgent';
+  }>({
+    title: '',
+    description: '',
+    projectId: '',
+    priority: 'medium',
+  });
+  
+  // Rejection reason
+  const [rejectionReason, setRejectionReason] = useState('');
 
   useEffect(() => {
     if (id) {
@@ -129,6 +157,136 @@ export default function MeetingDetail() {
         return 'destructive';
       default:
         return 'outline';
+    }
+  };
+
+  const handleApproveClick = (suggestion: AISuggestion) => {
+    setApprovingSuggestion(suggestion);
+    setApprovalForm({
+      title: suggestion.suggestedTask,
+      description: suggestion.originalText,
+      projectId: meeting?.projectId || '',
+      priority: 'medium',
+    });
+  };
+
+  const handleRejectClick = (suggestion: AISuggestion) => {
+    setRejectingSuggestion(suggestion);
+    setRejectionReason('');
+  };
+
+  const handleEditClick = (suggestion: AISuggestion) => {
+    setEditingSuggestion(suggestion);
+    setApprovalForm({
+      title: suggestion.suggestedTask,
+      description: suggestion.originalText,
+      projectId: meeting?.projectId || '',
+      priority: 'medium',
+    });
+  };
+
+  const confirmApprove = async () => {
+    if (!approvingSuggestion) return;
+
+    try {
+      const modifications: Partial<TaskCreateData> = {
+        title: approvalForm.title,
+        description: approvalForm.description,
+        projectId: approvalForm.projectId || undefined,
+        priority: approvalForm.priority,
+      };
+
+      await approveSuggestion(approvingSuggestion.id, modifications);
+      
+      // Reload suggestions
+      if (id) {
+        const updatedSuggestions = await getMeetingSuggestions(id);
+        setSuggestions(updatedSuggestions);
+      }
+
+      toast({
+        title: 'Success',
+        description: 'Suggestion approved and task created',
+      });
+
+      setApprovingSuggestion(null);
+      setApprovalForm({ title: '', description: '', projectId: '', priority: 'medium' });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to approve suggestion',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const confirmReject = async () => {
+    if (!rejectingSuggestion || !rejectionReason.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Please provide a reason for rejection',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      await rejectSuggestion(rejectingSuggestion.id, rejectionReason);
+      
+      // Reload suggestions
+      if (id) {
+        const updatedSuggestions = await getMeetingSuggestions(id);
+        setSuggestions(updatedSuggestions);
+      }
+
+      toast({
+        title: 'Success',
+        description: 'Suggestion rejected',
+      });
+
+      setRejectingSuggestion(null);
+      setRejectionReason('');
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to reject suggestion',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const confirmEditAndApprove = async () => {
+    if (!editingSuggestion) return;
+
+    try {
+      const modifications: Partial<TaskCreateData> = {
+        title: approvalForm.title,
+        description: approvalForm.description,
+        projectId: approvalForm.projectId || undefined,
+        priority: approvalForm.priority,
+      };
+
+      await approveSuggestion(editingSuggestion.id, modifications);
+      
+      // Reload suggestions
+      if (id) {
+        const updatedSuggestions = await getMeetingSuggestions(id);
+        setSuggestions(updatedSuggestions);
+      }
+
+      toast({
+        title: 'Success',
+        description: 'Suggestion edited and task created',
+      });
+
+      setEditingSuggestion(null);
+      setApprovalForm({ title: '', description: '', projectId: '', priority: 'medium' });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to approve suggestion',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -259,11 +417,16 @@ export default function MeetingDetail() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {suggestions.map((suggestion) => (
-                    <Card key={suggestion.id} className="border">
+                    <Card 
+                      key={suggestion.id} 
+                      className={`border transition-all hover:shadow-md ${
+                        suggestion.status === 'pending' ? 'cursor-pointer hover:border-blue-300' : ''
+                      }`}
+                    >
                       <CardContent className="p-4">
-                        <div className="flex items-start justify-between">
+                        <div className="flex items-start justify-between gap-4">
                           <div className="flex-1 space-y-2">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               {getStatusIcon(suggestion.status)}
                               <h4 className="font-semibold">{suggestion.suggestedTask}</h4>
                               <Badge variant={getStatusColor(suggestion.status)}>
@@ -287,6 +450,36 @@ export default function MeetingDetail() {
                               </div>
                             )}
                           </div>
+                          {suggestion.status === 'pending' && (
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleEditClick(suggestion)}
+                                title="Edit and approve"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleRejectClick(suggestion)}
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                title="Reject suggestion"
+                              >
+                                <XCircle className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() => handleApproveClick(suggestion)}
+                                className="bg-green-600 hover:bg-green-700"
+                                title="Approve suggestion"
+                              >
+                                <CheckCircle2 className="h-4 w-4 mr-1" />
+                                Approve
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       </CardContent>
                     </Card>
@@ -386,6 +579,213 @@ export default function MeetingDetail() {
             </Card>
           </div>
         </div>
+
+        {/* Approve Suggestion Dialog */}
+        <Dialog open={!!approvingSuggestion} onOpenChange={(open) => !open && setApprovingSuggestion(null)}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Approve Suggestion</DialogTitle>
+              <DialogDescription>
+                Review and customize the task details before creating it
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="approve-title">Task Title</Label>
+                <Input
+                  id="approve-title"
+                  value={approvalForm.title}
+                  onChange={(e) => setApprovalForm({ ...approvalForm, title: e.target.value })}
+                  placeholder="Enter task title"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="approve-description">Description</Label>
+                <Textarea
+                  id="approve-description"
+                  value={approvalForm.description}
+                  onChange={(e) => setApprovalForm({ ...approvalForm, description: e.target.value })}
+                  placeholder="Enter task description"
+                  rows={4}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="approve-project">Project (Optional)</Label>
+                  <Select
+                    value={approvalForm.projectId || 'none'}
+                    onValueChange={(value) => setApprovalForm({ ...approvalForm, projectId: value === 'none' ? '' : value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a project" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No Project</SelectItem>
+                      {projects.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="approve-priority">Priority</Label>
+                  <Select
+                    value={approvalForm.priority}
+                    onValueChange={(value: 'low' | 'medium' | 'high' | 'urgent') => 
+                      setApprovalForm({ ...approvalForm, priority: value })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="urgent">Urgent</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setApprovingSuggestion(null)}>
+                Cancel
+              </Button>
+              <Button onClick={confirmApprove} className="bg-green-600 hover:bg-green-700">
+                <CheckCircle2 className="h-4 w-4 mr-2" />
+                Create Task
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit and Approve Dialog */}
+        <Dialog open={!!editingSuggestion} onOpenChange={(open) => !open && setEditingSuggestion(null)}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Edit and Approve Suggestion</DialogTitle>
+              <DialogDescription>
+                Modify the suggestion before creating the task
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-title">Task Title</Label>
+                <Input
+                  id="edit-title"
+                  value={approvalForm.title}
+                  onChange={(e) => setApprovalForm({ ...approvalForm, title: e.target.value })}
+                  placeholder="Enter task title"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-description">Description</Label>
+                <Textarea
+                  id="edit-description"
+                  value={approvalForm.description}
+                  onChange={(e) => setApprovalForm({ ...approvalForm, description: e.target.value })}
+                  placeholder="Enter task description"
+                  rows={4}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-project">Project (Optional)</Label>
+                  <Select
+                    value={approvalForm.projectId || 'none'}
+                    onValueChange={(value) => setApprovalForm({ ...approvalForm, projectId: value === 'none' ? '' : value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a project" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No Project</SelectItem>
+                      {projects.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-priority">Priority</Label>
+                  <Select
+                    value={approvalForm.priority}
+                    onValueChange={(value: 'low' | 'medium' | 'high' | 'urgent') => 
+                      setApprovalForm({ ...approvalForm, priority: value })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="urgent">Urgent</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditingSuggestion(null)}>
+                Cancel
+              </Button>
+              <Button onClick={confirmEditAndApprove} className="bg-green-600 hover:bg-green-700">
+                <CheckCircle2 className="h-4 w-4 mr-2" />
+                Save & Create Task
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Reject Suggestion Dialog */}
+        <Dialog open={!!rejectingSuggestion} onOpenChange={(open) => !open && setRejectingSuggestion(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Reject Suggestion</DialogTitle>
+              <DialogDescription>
+                Please provide a reason for rejecting this suggestion
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              {rejectingSuggestion && (
+                <div className="p-3 bg-gray-50 rounded-lg">
+                  <p className="text-sm font-medium mb-1">Suggestion:</p>
+                  <p className="text-sm text-muted-foreground">{rejectingSuggestion.suggestedTask}</p>
+                </div>
+              )}
+              <div className="space-y-2">
+                <Label htmlFor="reject-reason">Rejection Reason</Label>
+                <Textarea
+                  id="reject-reason"
+                  value={rejectionReason}
+                  onChange={(e) => setRejectionReason(e.target.value)}
+                  placeholder="Explain why this suggestion is being rejected..."
+                  rows={4}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setRejectingSuggestion(null)}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={confirmReject} 
+                variant="destructive"
+                disabled={!rejectionReason.trim()}
+              >
+                <XCircle className="h-4 w-4 mr-2" />
+                Reject
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </AppLayout>
   );

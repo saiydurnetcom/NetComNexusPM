@@ -61,9 +61,14 @@ export default function MeetingProcessor() {
       });
     } catch (err) {
       console.error('Failed to process meeting:', err);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      const detailedMessage = errorMessage.includes('API') 
+        ? `${errorMessage}. Make sure VITE_AI_API_KEY and VITE_AI_API_URL are set in your environment variables.`
+        : errorMessage;
+      
       toast({
-        title: 'Error',
-        description: err instanceof Error ? err.message : 'Failed to process meeting. Please check your API configuration.',
+        title: 'Error Processing Meeting',
+        description: detailedMessage,
         variant: 'destructive',
       });
     }
