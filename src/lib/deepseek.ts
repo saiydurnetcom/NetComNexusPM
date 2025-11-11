@@ -98,17 +98,12 @@ export const deepseekService = {
           confidenceScore: typeof s.confidenceScore === 'number' ? Math.max(0, Math.min(1, s.confidenceScore)) : 0.8,
         }));
 
-        return suggestions.map((s, index) => ({
-          id: `ai-${Date.now()}-${index}`,
-          meetingId: 'temp-meeting-id',
+        // Return suggestions without IDs - Supabase will generate UUIDs on insert
+        return suggestions.map((s) => ({
           originalText: s.originalText,
           suggestedTask: s.suggestedTask,
           confidenceScore: s.confidenceScore,
           status: 'pending' as const,
-          reviewedBy: null,
-          reviewedAt: null,
-          rejectionReason: null,
-          createdAt: new Date().toISOString(),
         }));
       } catch (error) {
         console.error('AI API error:', error);

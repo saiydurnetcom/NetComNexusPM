@@ -339,10 +339,17 @@ export const aiSuggestionsService = {
 
     if (meetingError) throw meetingError;
 
-    // Save suggestions
+    // Save suggestions (remove any temporary IDs, let Supabase generate UUIDs)
     const suggestionsToInsert = suggestions.map(s => ({
-      ...s,
       meetingId: meeting.id,
+      originalText: s.originalText,
+      suggestedTask: s.suggestedTask,
+      confidenceScore: s.confidenceScore,
+      status: s.status || 'pending',
+      reviewedBy: null,
+      reviewedAt: null,
+      rejectionReason: null,
+      createdAt: new Date().toISOString(),
     }));
 
     const { data: savedSuggestions, error: suggestionsError } = await supabase

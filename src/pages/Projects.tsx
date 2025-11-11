@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import Navigation from '@/components/Navigation';
 import { useToast } from '@/components/ui/use-toast';
 import { useProjects } from '@/hooks/useProjects';
@@ -91,6 +91,7 @@ export default function Projects() {
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Create New Project</DialogTitle>
+                <DialogDescription>Enter project details to create a new project</DialogDescription>
               </DialogHeader>
               <form onSubmit={handleCreateProject} className="space-y-4">
                 <div className="space-y-2">

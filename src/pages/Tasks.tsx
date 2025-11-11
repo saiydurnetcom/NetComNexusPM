@@ -27,6 +27,7 @@ export default function Tasks() {
   const { user } = useAuth();
   const { tasks, fetchTasks, createTask, updateTaskStatus, isLoading, error: tasksError } = useTasks();
   const { projects, fetchProjects } = useProjects();
+  const { timeEntries, fetchTimeEntries } = useTimeTracking();
   const { toast } = useToast();
   
   // Dialog states

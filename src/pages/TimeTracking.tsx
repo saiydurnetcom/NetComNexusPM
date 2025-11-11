@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import Navigation from '@/components/Navigation';
 import { useTimeTracking } from '@/hooks/useTimeTracking';
 import { useTasks } from '@/hooks/useTasks';
@@ -248,7 +248,7 @@ export default function TimeTracking() {
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Start Timer</DialogTitle>
-                <CardDescription>Select a task to start tracking time</CardDescription>
+                <DialogDescription>Select a task to start tracking time</DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
                 <div className="space-y-2">
@@ -296,7 +296,7 @@ export default function TimeTracking() {
             <DialogContent className="max-w-2xl">
               <DialogHeader>
                 <DialogTitle>Add Time Sheet Entry</DialogTitle>
-                <CardDescription>Manually add a time entry for a task</CardDescription>
+                <DialogDescription>Manually add a time entry for a completed task</DialogDescription>
               </DialogHeader>
               <form onSubmit={handleSubmitTimeSheet} className="space-y-4">
                 <div className="space-y-2">
