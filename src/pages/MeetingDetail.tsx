@@ -1058,8 +1058,13 @@ function SuggestionCard({
               </Badge>
             </div>
             <p className="text-sm text-muted-foreground">
-              {suggestion.originalText}
+              {suggestion.suggestedDescription || suggestion.originalText}
             </p>
+            {suggestion.suggestedDescription && (
+              <p className="text-xs text-muted-foreground italic mt-1">
+                Source: "{suggestion.originalText}"
+              </p>
+            )}
             <div className="flex items-center gap-4 text-xs text-muted-foreground">
               <span>Confidence: {(suggestion.confidenceScore * 100).toFixed(0)}%</span>
               {suggestion.reviewedAt && (

@@ -1,0 +1,28 @@
+{
+  "name": "NexusPM - Time Tracker",
+  "short_name": "NexusPM",
+  "description": "Project Management and Time Tracking Application",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#3b82f6",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Time Tracker",
+      "short_name": "Tracker",
+      "description": "Open time tracker widget",
+      "url": "/time-tracker-widget",
+      "icons": [{ "src": "/favicon.svg", "sizes": "any" }]
+    }
+  ]
+}
+

@@ -250,8 +250,13 @@ export default function MeetingProcessor() {
                     <div className="space-y-2 flex-1">
                       <h4 className="font-semibold">{suggestion.suggestedTask}</h4>
                       <p className="text-sm text-muted-foreground">
-                        {suggestion.originalText}
+                        {suggestion.suggestedDescription || suggestion.originalText}
                       </p>
+                      {suggestion.suggestedDescription && (
+                        <p className="text-xs text-muted-foreground italic mt-1">
+                          Source: "{suggestion.originalText}"
+                        </p>
+                      )}
                       <div className="flex items-center space-x-4 text-sm">
                         <span>Confidence: {(suggestion.confidenceScore * 100).toFixed(0)}%</span>
                       </div>
