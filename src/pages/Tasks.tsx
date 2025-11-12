@@ -20,7 +20,8 @@ import { tasksService } from '@/lib/supabase-data';
 import { usersService } from '@/lib/users-service';
 import { supabase } from '@/lib/supabase';
 import { Task, User, Tag } from '@/types';
-import { Plus, Search, Filter, Edit, Trash2, Calendar, Clock, ArrowUpDown, CheckCircle2, Circle, PlayCircle, User as UserIcon, FolderKanban, Play, Square, Tag as TagIcon, List, Grid } from 'lucide-react';
+import { Plus, Search, Filter, Edit, Trash2, Calendar, Clock, ArrowUpDown, CheckCircle2, Circle, PlayCircle, User as UserIcon, FolderKanban, Play, Square, Tag as TagIcon, List, Grid, LayoutGrid } from 'lucide-react';
+import { KanbanBoard } from '@/components/KanbanBoard';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { format } from 'date-fns';
 import { TagSelector } from '@/components/TagSelector';
@@ -59,7 +60,7 @@ export default function Tasks() {
   const [projectFilter, setProjectFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<'title' | 'dueDate' | 'priority' | 'status'>('dueDate');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'table' | 'kanban'>('grid');
 
   useEffect(() => {
     const loadData = async () => {
@@ -734,6 +735,14 @@ export default function Tasks() {
                   <List className="h-4 w-4 mr-2" />
                   Table
                 </Button>
+                <Button
+                  variant={viewMode === 'kanban' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setViewMode('kanban')}
+                >
+                  <FolderKanban className="h-4 w-4 mr-2" />
+                  Kanban
+                </Button>
               </div>
             </div>
 
@@ -835,6 +844,31 @@ export default function Tasks() {
                   </div>
                 </CardContent>
               </Card>
+            ) : viewMode === 'kanban' ? (
+              <div className="w-full">
+                <KanbanBoard
+                  tasks={filteredTasks}
+                  onTaskStatusChange={async (taskId, newStatus) => {
+                    try {
+                      await updateTaskStatus(taskId, newStatus);
+                      await fetchTasks();
+                      toast({
+                        title: 'Success',
+                        description: 'Task status updated',
+                      });
+                    } catch (error) {
+                      toast({
+                        title: 'Error',
+                        description: 'Failed to update task status',
+                        variant: 'destructive',
+                      });
+                      throw error;
+                    }
+                  }}
+                  showProject={true}
+                  users={availableUsers}
+                />
+              </div>
             ) : viewMode === 'table' ? (
               <Card>
                 <CardContent className="p-0">

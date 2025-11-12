@@ -22,6 +22,7 @@ import { adminService } from '@/lib/admin-service';
 import { Task, Project, User, Tag, ProjectRisk, ProjectBudgetItem, ProjectMilestone } from '@/types';
 import { TagSelector } from '@/components/TagSelector';
 import { GanttChart } from '@/components/GanttChart';
+import { KanbanBoard } from '@/components/KanbanBoard';
 import { projectRisksService, projectBudgetService, projectMilestonesService } from '@/lib/project-features-service';
 import { 
   Play, 
@@ -706,9 +707,13 @@ export default function ProjectDetail() {
         </CardHeader>
           <CardContent>
             <Tabs defaultValue="overview" className="w-full">
-              <TabsList className="grid grid-cols-6 w-full">
+              <TabsList className="grid grid-cols-7 w-full">
                 <TabsTrigger value="overview">Overview</TabsTrigger>
                 <TabsTrigger value="details">Details</TabsTrigger>
+                <TabsTrigger value="kanban">
+                  <FolderKanban className="h-4 w-4 mr-1" />
+                  Kanban
+                </TabsTrigger>
                 <TabsTrigger value="risks">
                   <AlertTriangle className="h-4 w-4 mr-1" />
                   Risks
@@ -777,6 +782,35 @@ export default function ProjectDetail() {
                     <p className="text-sm">{(currentProject as any).purpose}</p>
                   </div>
                 )}
+              </TabsContent>
+
+              <TabsContent value="kanban" className="space-y-4 mt-4">
+                <div>
+                  <h3 className="text-lg font-semibold mb-2">Kanban Board</h3>
+                  <p className="text-sm text-muted-foreground mb-4">Drag and drop tasks to change their status</p>
+                  <KanbanBoard
+                    tasks={projectTasks}
+                    onTaskStatusChange={async (taskId, newStatus) => {
+                      try {
+                        await updateTaskStatus(taskId, newStatus);
+                        await fetchTasks();
+                        toast({
+                          title: 'Success',
+                          description: 'Task status updated',
+                        });
+                      } catch (error) {
+                        toast({
+                          title: 'Error',
+                          description: 'Failed to update task status',
+                          variant: 'destructive',
+                        });
+                        throw error;
+                      }
+                    }}
+                    showProject={false}
+                    users={availableUsers}
+                  />
+                </div>
               </TabsContent>
 
               <TabsContent value="details" className="space-y-4 mt-4">
