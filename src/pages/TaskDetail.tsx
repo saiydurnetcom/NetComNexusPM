@@ -80,6 +80,15 @@ export default function TaskDetail() {
     description: '',
     billable: false,
   });
+  
+  // Dependencies, Sub-tasks, and Comments
+  const { dependencies, fetchDependencies, createDependency, deleteDependency } = useTaskDependencies();
+  const { comments, fetchComments, createComment, updateComment, deleteComment } = useTaskComments();
+  const [isDependencyDialogOpen, setIsDependencyDialogOpen] = useState(false);
+  const [selectedDependencyTask, setSelectedDependencyTask] = useState('');
+  const [newComment, setNewComment] = useState('');
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editCommentContent, setEditCommentContent] = useState('');
 
   useEffect(() => {
     if (id) {
@@ -88,6 +97,8 @@ export default function TaskDetail() {
       fetchTimeEntries();
       loadUsers();
       loadAttachments();
+      fetchDependencies(id);
+      fetchComments(id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
@@ -99,7 +110,7 @@ export default function TaskDetail() {
       // Try lowercase first
       let result = await supabase
         .from('tasks')
-        .select('id, projectid, title, description, status, priority, estimatedhours, assignedto, createdby, duedate, createdat, updatedat, meetingid, reviewerid')
+        .select('id, projectid, title, description, status, priority, estimatedhours, assignedto, createdby, duedate, createdat, updatedat, meetingid, reviewerid, parenttaskid')
         .eq('id', id)
         .single();
       
@@ -113,7 +124,7 @@ export default function TaskDetail() {
       )) {
         result = await supabase
           .from('tasks')
-          .select('id, projectId, title, description, status, priority, estimatedHours, assignedTo, createdBy, dueDate, createdAt, updatedAt, meetingId, reviewerId')
+          .select('id, projectId, title, description, status, priority, estimatedHours, assignedTo, createdBy, dueDate, createdAt, updatedAt, meetingId, reviewerId, parentTaskId')
           .eq('id', id)
           .single();
       }
@@ -146,6 +157,7 @@ export default function TaskDetail() {
         updatedAt: data.updatedAt || data.updatedat || data.updated_at,
         meetingId: data.meetingId || data.meetingid || data.meeting_id || null,
         reviewerId: data.reviewerId || data.reviewerid || data.reviewer_id || null,
+        parentTaskId: data.parentTaskId || data.parenttaskid || data.parent_task_id || null,
       };
       
       if (normalizedTask) {
@@ -682,6 +694,7 @@ export default function TaskDetail() {
                   <SelectItem value="todo">To Do</SelectItem>
                   <SelectItem value="in_progress">In Progress</SelectItem>
                   <SelectItem value="review">Review</SelectItem>
+                  <SelectItem value="blocked">Blocked</SelectItem>
                   <SelectItem value="completed">Completed</SelectItem>
                 </SelectContent>
               </Select>
@@ -1079,6 +1092,15 @@ export default function TaskDetail() {
                 >
                   <AlertCircle className="h-4 w-4 mr-2" />
                   Mark for Review
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => handleStatusChange('blocked')}
+                  disabled={task.status === 'blocked'}
+                >
+                  <AlertCircle className="h-4 w-4 mr-2" />
+                  Mark as Blocked
                 </Button>
                 <Button
                   variant="outline"

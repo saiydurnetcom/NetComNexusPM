@@ -26,16 +26,25 @@ export interface Task {
   projectId: string;
   title: string;
   description: string;
-  status: 'todo' | 'in_progress' | 'review' | 'completed';
+  status: 'todo' | 'in_progress' | 'review' | 'completed' | 'blocked';
   priority: 'low' | 'medium' | 'high' | 'urgent';
   estimatedHours: number;
   assignedTo: string;
   reviewerId?: string | null; // Reviewer when task is in review status
   meetingId?: string | null; // Meeting from which this task was created
+  parentTaskId?: string | null; // Parent task for sub-tasks
   createdBy: string;
   createdAt: string;
   updatedAt: string;
   dueDate: string;
+}
+
+export interface TaskDependency {
+  id: string;
+  taskId: string;
+  dependsOnTaskId: string;
+  dependencyType: 'finish_to_start' | 'start_to_start' | 'finish_to_finish' | 'start_to_finish';
+  createdAt: string;
 }
 
 export interface TaskAttachment {
@@ -128,6 +137,7 @@ export interface TaskCreateData {
   estimatedHours: number;
   assignedTo: string;
   dueDate: string;
+  parentTaskId?: string | null; // Optional - for sub-tasks
 }
 
 export interface MeetingProcessData {

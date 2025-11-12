@@ -445,6 +445,8 @@ export default function Tasks() {
         return <PlayCircle className="h-4 w-4 text-blue-600" />;
       case 'review':
         return <AlertCircle className="h-4 w-4 text-orange-600" />;
+      case 'blocked':
+        return <AlertCircle className="h-4 w-4 text-red-600" />;
       default:
         return <Circle className="h-4 w-4 text-gray-400" />;
     }
@@ -625,6 +627,7 @@ export default function Tasks() {
                         <SelectItem value="todo">To Do</SelectItem>
                         <SelectItem value="in_progress">In Progress</SelectItem>
                         <SelectItem value="review">Review</SelectItem>
+                        <SelectItem value="blocked">Blocked</SelectItem>
                         <SelectItem value="completed">Completed</SelectItem>
                       </SelectContent>
                     </Select>
@@ -1095,6 +1098,7 @@ export default function Tasks() {
                                 <SelectItem value="todo">To Do</SelectItem>
                                 <SelectItem value="in_progress">In Progress</SelectItem>
                                 <SelectItem value="review">Review</SelectItem>
+                                <SelectItem value="blocked">Blocked</SelectItem>
                                 <SelectItem value="completed">Completed</SelectItem>
                               </SelectContent>
                             </Select>

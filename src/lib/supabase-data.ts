@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { Project, ProjectCreateData, Task, TaskCreateData, TimeEntry, MeetingProcessData, AISuggestion, Meeting, ProjectReport } from '../types';
+import { Project, ProjectCreateData, Task, TaskCreateData, TimeEntry, MeetingProcessData, AISuggestion, Meeting, ProjectReport, TaskDependency, TaskComment, Notification } from '../types';
 
 // Projects
 export const projectsService = {
@@ -216,7 +216,7 @@ export const tasksService = {
     // Try lowercase first
     let query = supabase
       .from('tasks')
-      .select('id, projectid, title, description, status, priority, estimatedhours, assignedto, createdby, duedate, createdat, updatedat, meetingid, reviewerid')
+      .select('id, projectid, title, description, status, priority, estimatedhours, assignedto, createdby, duedate, createdat, updatedat, meetingid, reviewerid, parenttaskid')
       .order('createdat', { ascending: false });
 
     if (projectId) {
@@ -236,7 +236,7 @@ export const tasksService = {
     )) {
       query = supabase
         .from('tasks')
-        .select('id, projectId, title, description, status, priority, estimatedHours, assignedTo, createdBy, dueDate, createdAt, updatedAt, meetingId, reviewerId')
+        .select('id, projectId, title, description, status, priority, estimatedHours, assignedTo, createdBy, dueDate, createdAt, updatedAt, meetingId, reviewerId, parentTaskId')
         .order('createdAt', { ascending: false });
 
       if (projectId) {
@@ -284,6 +284,7 @@ export const tasksService = {
       updatedAt: t.updatedAt || t.updatedat || t.updated_at,
       meetingId: t.meetingId || t.meetingid || t.meeting_id || null,
       reviewerId: t.reviewerId || t.reviewerid || t.reviewer_id || null,
+      parentTaskId: t.parentTaskId || t.parenttaskid || t.parent_task_id || null,
     }));
   },
 
@@ -302,6 +303,7 @@ export const tasksService = {
       assignedto: data.assignedTo,
       createdby: user.id,
       duedate: data.dueDate,
+      parenttaskid: data.parentTaskId || null,
       createdat: new Date().toISOString(),
       updatedat: new Date().toISOString(),
     };
@@ -309,7 +311,7 @@ export const tasksService = {
     let result = await supabase
       .from('tasks')
       .insert(insertDataLower)
-      .select('id, projectid, title, description, status, priority, estimatedhours, assignedto, createdby, duedate, createdat, updatedat, meetingid, reviewerid')
+      .select('id, projectid, title, description, status, priority, estimatedhours, assignedto, createdby, duedate, createdat, updatedat, meetingid, reviewerid, parenttaskid')
       .single();
     
     // If lowercase fails, try camelCase
@@ -331,6 +333,7 @@ export const tasksService = {
         assignedTo: data.assignedTo,
         createdBy: user.id,
         dueDate: data.dueDate,
+        parentTaskId: data.parentTaskId || null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -338,7 +341,7 @@ export const tasksService = {
       result = await supabase
         .from('tasks')
         .insert(insertDataCamel)
-        .select('id, projectId, title, description, status, priority, estimatedHours, assignedTo, createdBy, dueDate, createdAt, updatedAt, meetingId, reviewerId')
+        .select('id, projectId, title, description, status, priority, estimatedHours, assignedTo, createdBy, dueDate, createdAt, updatedAt, meetingId, reviewerId, parentTaskId')
       .single();
     }
     
@@ -360,6 +363,7 @@ export const tasksService = {
         assignedTo: data.assignedTo,
         createdBy: user.id,
         dueDate: data.dueDate,
+        parentTaskId: data.parentTaskId || null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -390,6 +394,7 @@ export const tasksService = {
       updatedAt: task.updatedAt || task.updatedat || task.updated_at,
       meetingId: task.meetingId || task.meetingid || task.meeting_id || null,
       reviewerId: task.reviewerId || task.reviewerid || task.reviewer_id || null,
+      parentTaskId: task.parentTaskId || task.parenttaskid || task.parent_task_id || null,
     };
   },
 
@@ -404,7 +409,7 @@ export const tasksService = {
       .from('tasks')
       .update(updateDataLower)
       .eq('id', id)
-      .select('id, projectid, title, description, status, priority, estimatedhours, assignedto, createdby, duedate, createdat, updatedat, meetingid, reviewerid')
+      .select('id, projectid, title, description, status, priority, estimatedhours, assignedto, createdby, duedate, createdat, updatedat, meetingid, reviewerid, parenttaskid')
       .single();
     
     // If lowercase fails, try camelCase
@@ -425,7 +430,7 @@ export const tasksService = {
         .from('tasks')
         .update(updateDataCamel)
       .eq('id', id)
-        .select('id, projectId, title, description, status, priority, estimatedHours, assignedTo, createdBy, dueDate, createdAt, updatedAt, meetingId, reviewerId')
+        .select('id, projectId, title, description, status, priority, estimatedHours, assignedTo, createdBy, dueDate, createdAt, updatedAt, meetingId, reviewerId, parentTaskId')
       .single();
     }
     
@@ -469,6 +474,7 @@ export const tasksService = {
       updatedAt: task.updatedAt || task.updatedat || task.updated_at,
       meetingId: task.meetingId || task.meetingid || task.meeting_id || null,
       reviewerId: task.reviewerId || task.reviewerid || task.reviewer_id || null,
+      parentTaskId: task.parentTaskId || task.parenttaskid || task.parent_task_id || null,
     };
   },
 };
@@ -1607,6 +1613,420 @@ export const projectReportsService = {
       .eq('generatedby', user.id); // Only allow deleting own reports
 
     if (error) throw error;
+  },
+};
+
+// Task Dependencies Service
+export const taskDependenciesService = {
+  async getDependencies(taskId: string): Promise<TaskDependency[]> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    let result = await supabase
+      .from('task_dependencies')
+      .select('*')
+      .eq('taskid', taskId);
+
+    if (result.error && (
+      result.error.code === 'PGRST204' || 
+      result.error.code === '42703' ||
+      result.error.status === 400 ||
+      result.error.message?.includes('column')
+    )) {
+      result = await supabase
+        .from('task_dependencies')
+        .select('*')
+        .eq('taskId', taskId);
+    }
+
+    if (result.error) throw result.error;
+
+    return (result.data || []).map((d: any) => ({
+      id: d.id,
+      taskId: d.taskId || d.taskid || d.task_id,
+      dependsOnTaskId: d.dependsOnTaskId || d.dependson_task_id || d.depends_on_task_id,
+      dependencyType: d.dependencyType || d.dependencytype || d.dependency_type || 'finish_to_start',
+      createdAt: d.createdAt || d.createdat || d.created_at,
+    }));
+  },
+
+  async createDependency(data: {
+    taskId: string;
+    dependsOnTaskId: string;
+    dependencyType?: 'finish_to_start' | 'start_to_start' | 'finish_to_finish' | 'start_to_finish';
+  }): Promise<TaskDependency> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    let result = await supabase
+      .from('task_dependencies')
+      .insert({
+        taskid: data.taskId,
+        dependson_task_id: data.dependsOnTaskId,
+        dependencytype: data.dependencyType || 'finish_to_start',
+      })
+      .select('*')
+      .single();
+
+    if (result.error && (
+      result.error.code === 'PGRST204' || 
+      result.error.code === '42703' ||
+      result.error.status === 400 ||
+      result.error.message?.includes('column')
+    )) {
+      result = await supabase
+        .from('task_dependencies')
+        .insert({
+          taskId: data.taskId,
+          dependsOnTaskId: data.dependsOnTaskId,
+          dependencyType: data.dependencyType || 'finish_to_start',
+        })
+        .select('*')
+        .single();
+    }
+
+    if (result.error) throw result.error;
+
+    const dep = result.data;
+    return {
+      id: dep.id,
+      taskId: dep.taskId || dep.taskid || dep.task_id,
+      dependsOnTaskId: dep.dependsOnTaskId || dep.dependson_task_id || dep.depends_on_task_id,
+      dependencyType: dep.dependencyType || dep.dependencytype || dep.dependency_type || 'finish_to_start',
+      createdAt: dep.createdAt || dep.createdat || dep.created_at,
+    };
+  },
+
+  async deleteDependency(dependencyId: string): Promise<void> {
+    const { error } = await supabase
+      .from('task_dependencies')
+      .delete()
+      .eq('id', dependencyId);
+
+    if (error) throw error;
+  },
+};
+
+// Task Comments Service
+export const taskCommentsService = {
+  async getComments(taskId: string): Promise<TaskComment[]> {
+    let result = await supabase
+      .from('task_comments')
+      .select('*, users(id, firstName, lastName, email)')
+      .eq('taskid', taskId)
+      .order('createdat', { ascending: false });
+
+    if (result.error && (
+      result.error.code === 'PGRST204' || 
+      result.error.code === '42703' ||
+      result.error.status === 400 ||
+      result.error.message?.includes('column')
+    )) {
+      result = await supabase
+        .from('task_comments')
+        .select('*, users(id, firstName, lastName, email)')
+        .eq('taskId', taskId)
+        .order('createdAt', { ascending: false });
+    }
+
+    if (result.error) throw result.error;
+
+    return (result.data || []).map((c: any) => ({
+      id: c.id,
+      taskId: c.taskId || c.taskid || c.task_id,
+      userId: c.userId || c.userid || c.user_id,
+      content: c.content,
+      mentionedUserIds: c.mentionedUserIds || c.mentioned_user_ids || c.mentioneduserids || [],
+      createdAt: c.createdAt || c.createdat || c.created_at,
+      updatedAt: c.updatedAt || c.updatedat || c.updated_at,
+      user: c.users ? {
+        id: c.users.id,
+        firstName: c.users.firstName || c.users.firstname,
+        lastName: c.users.lastName || c.users.lastname,
+        email: c.users.email,
+      } : undefined,
+    }));
+  },
+
+  async createComment(data: {
+    taskId: string;
+    content: string;
+    mentionedUserIds?: string[];
+  }): Promise<TaskComment> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    let result = await supabase
+      .from('task_comments')
+      .insert({
+        taskid: data.taskId,
+        userid: user.id,
+        content: data.content,
+        mentioneduserids: data.mentionedUserIds || [],
+      })
+      .select('*, users(id, firstName, lastName, email)')
+      .single();
+
+    if (result.error && (
+      result.error.code === 'PGRST204' || 
+      result.error.code === '42703' ||
+      result.error.status === 400 ||
+      result.error.message?.includes('column')
+    )) {
+      result = await supabase
+        .from('task_comments')
+        .insert({
+          taskId: data.taskId,
+          userId: user.id,
+          content: data.content,
+          mentionedUserIds: data.mentionedUserIds || [],
+        })
+        .select('*, users(id, firstName, lastName, email)')
+        .single();
+    }
+
+    if (result.error) throw result.error;
+
+    const comment = result.data;
+    return {
+      id: comment.id,
+      taskId: comment.taskId || comment.taskid || comment.task_id,
+      userId: comment.userId || comment.userid || comment.user_id,
+      content: comment.content,
+      mentionedUserIds: comment.mentionedUserIds || comment.mentioned_user_ids || comment.mentioneduserids || [],
+      createdAt: comment.createdAt || comment.createdat || comment.created_at,
+      updatedAt: comment.updatedAt || comment.updatedat || comment.updated_at,
+      user: comment.users ? {
+        id: comment.users.id,
+        firstName: comment.users.firstName || comment.users.firstname,
+        lastName: comment.users.lastName || comment.users.lastname,
+        email: comment.users.email,
+      } : undefined,
+    };
+  },
+
+  async updateComment(commentId: string, content: string): Promise<TaskComment> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    let result = await supabase
+      .from('task_comments')
+      .update({
+        content,
+        updatedat: new Date().toISOString(),
+      })
+      .eq('id', commentId)
+      .eq('userid', user.id)
+      .select('*, users(id, firstName, lastName, email)')
+      .single();
+
+    if (result.error && (
+      result.error.code === 'PGRST204' || 
+      result.error.code === '42703' ||
+      result.error.status === 400 ||
+      result.error.message?.includes('column')
+    )) {
+      result = await supabase
+        .from('task_comments')
+        .update({
+          content,
+          updatedAt: new Date().toISOString(),
+        })
+        .eq('id', commentId)
+        .eq('userId', user.id)
+        .select('*, users(id, firstName, lastName, email)')
+        .single();
+    }
+
+    if (result.error) throw result.error;
+
+    const comment = result.data;
+    return {
+      id: comment.id,
+      taskId: comment.taskId || comment.taskid || comment.task_id,
+      userId: comment.userId || comment.userid || comment.user_id,
+      content: comment.content,
+      mentionedUserIds: comment.mentionedUserIds || comment.mentioned_user_ids || comment.mentioneduserids || [],
+      createdAt: comment.createdAt || comment.createdat || comment.created_at,
+      updatedAt: comment.updatedAt || comment.updatedat || comment.updated_at,
+      user: comment.users ? {
+        id: comment.users.id,
+        firstName: comment.users.firstName || comment.users.firstname,
+        lastName: comment.users.lastName || comment.users.lastname,
+        email: comment.users.email,
+      } : undefined,
+    };
+  },
+
+  async deleteComment(commentId: string): Promise<void> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { error } = await supabase
+      .from('task_comments')
+      .delete()
+      .eq('id', commentId)
+      .eq('userid', user.id);
+
+    if (error && (error.code === '42703' || error.message?.includes('userid'))) {
+      const result = await supabase
+        .from('task_comments')
+        .delete()
+        .eq('id', commentId)
+        .eq('userId', user.id);
+      if (result.error) throw result.error;
+    } else if (error) {
+      throw error;
+    }
+  },
+};
+
+// Notifications Service
+export const notificationsService = {
+  async getNotifications(unreadOnly: boolean = false): Promise<Notification[]> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    let query = supabase
+      .from('notifications')
+      .select('*')
+      .eq('userid', user.id)
+      .order('createdat', { ascending: false })
+      .limit(100);
+
+    if (unreadOnly) {
+      query = query.eq('read', false);
+    }
+
+    let result = await query;
+
+    if (result.error && (
+      result.error.code === 'PGRST204' || 
+      result.error.code === '42703' ||
+      result.error.status === 400 ||
+      result.error.message?.includes('column')
+    )) {
+      query = supabase
+        .from('notifications')
+        .select('*')
+        .eq('userId', user.id)
+        .order('createdAt', { ascending: false })
+        .limit(100);
+
+      if (unreadOnly) {
+        query = query.eq('read', false);
+      }
+
+      result = await query;
+    }
+
+    if (result.error) throw result.error;
+
+    return (result.data || []).map((n: any) => ({
+      id: n.id,
+      userId: n.userId || n.userid || n.user_id,
+      type: n.type,
+      title: n.title,
+      message: n.message,
+      relatedTaskId: n.relatedTaskId || n.related_task_id || n.relatedtaskid,
+      relatedProjectId: n.relatedProjectId || n.related_project_id || n.relatedprojectid,
+      relatedCommentId: n.relatedCommentId || n.related_comment_id || n.relatedcommentid,
+      read: n.read || false,
+      readAt: n.readAt || n.read_at || n.readat,
+      createdAt: n.createdAt || n.createdat || n.created_at,
+    }));
+  },
+
+  async markAsRead(notificationId: string): Promise<void> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    let result = await supabase
+      .from('notifications')
+      .update({
+        read: true,
+        readat: new Date().toISOString(),
+      })
+      .eq('id', notificationId)
+      .eq('userid', user.id);
+
+    if (result.error && (
+      result.error.code === 'PGRST204' || 
+      result.error.code === '42703' ||
+      result.error.status === 400 ||
+      result.error.message?.includes('column')
+    )) {
+      result = await supabase
+        .from('notifications')
+        .update({
+          read: true,
+          readAt: new Date().toISOString(),
+        })
+        .eq('id', notificationId)
+        .eq('userId', user.id);
+    }
+
+    if (result.error) throw result.error;
+  },
+
+  async markAllAsRead(): Promise<void> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    // Use the database function
+    const { error } = await supabase.rpc('mark_all_notifications_read');
+
+    if (error) {
+      // Fallback to direct update
+      let result = await supabase
+        .from('notifications')
+        .update({
+          read: true,
+          readat: new Date().toISOString(),
+        })
+        .eq('userid', user.id)
+        .eq('read', false);
+
+      if (result.error && (
+        result.error.code === 'PGRST204' || 
+        result.error.code === '42703' ||
+        result.error.status === 400 ||
+        result.error.message?.includes('column')
+      )) {
+        result = await supabase
+          .from('notifications')
+          .update({
+            read: true,
+            readAt: new Date().toISOString(),
+          })
+          .eq('userId', user.id)
+          .eq('read', false);
+      }
+
+      if (result.error) throw result.error;
+    }
+  },
+
+  async deleteNotification(notificationId: string): Promise<void> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { error } = await supabase
+      .from('notifications')
+      .delete()
+      .eq('id', notificationId)
+      .eq('userid', user.id);
+
+    if (error && (error.code === '42703' || error.message?.includes('userid'))) {
+      const result = await supabase
+        .from('notifications')
+        .delete()
+        .eq('id', notificationId)
+        .eq('userId', user.id);
+      if (result.error) throw result.error;
+    } else if (error) {
+      throw error;
+    }
   },
 };
 

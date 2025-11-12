@@ -15,6 +15,7 @@ import {
   Timer,
   BarChart3
 } from 'lucide-react';
+import { NotificationBell } from './NotificationBell';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 
@@ -48,11 +49,14 @@ export default function Sidebar() {
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex flex-col w-64 bg-gray-900 text-white border-r border-gray-800 fixed left-0 top-0 h-screen z-40">
         {/* Logo */}
-        <div className="flex items-center gap-3 px-6 py-5 border-b border-gray-800">
-          <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-blue-600">
-            <Clock className="h-6 w-6 text-white" />
+        <div className="flex items-center justify-between gap-3 px-6 py-5 border-b border-gray-800">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-blue-600">
+              <Clock className="h-6 w-6 text-white" />
+            </div>
+            <span className="text-xl font-bold">NexusPM</span>
           </div>
-          <span className="text-xl font-bold">NexusPM</span>
+          <NotificationBell />
         </div>
 
         {/* Navigation */}
