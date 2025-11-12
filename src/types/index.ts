@@ -206,3 +206,16 @@ export interface ProjectWithTags extends Project {
 export interface TaskWithTags extends Task {
   tags?: Tag[];
 }
+
+export interface NotificationPreferences {
+  id: string;
+  userId: string;
+  emailNotifications: boolean;
+  taskAssignments: boolean;
+  projectUpdates: boolean;
+  meetingReminders: boolean;
+  pushNotifications: boolean;
+  pushSubscription?: any; // Web Push API subscription object
+  createdAt: string;
+  updatedAt: string;
+}

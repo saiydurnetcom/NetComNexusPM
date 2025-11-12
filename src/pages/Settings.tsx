@@ -11,6 +11,8 @@ import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/lib/supabase';
+import { notificationPreferencesService } from '@/lib/notification-preferences-service';
+import { pushNotificationService } from '@/lib/push-notification-service';
 import { RefreshCw } from 'lucide-react';
 import { 
   User, 
@@ -38,7 +40,11 @@ export default function Settings() {
     taskAssignments: true,
     projectUpdates: true,
     meetingReminders: true,
+    pushNotifications: false,
   });
+  const [isLoadingPreferences, setIsLoadingPreferences] = useState(false);
+  const [pushSupported, setPushSupported] = useState(false);
+  const [pushPermission, setPushPermission] = useState<NotificationPermission>('default');
 
   useEffect(() => {
     if (user) {
@@ -47,8 +53,107 @@ export default function Settings() {
         lastName: user.lastName || '',
         email: user.email || '',
       });
+      loadNotificationPreferences();
     }
   }, [user]);
+
+  useEffect(() => {
+    // Check push notification support
+    if (pushNotificationService.isSupported()) {
+      setPushSupported(true);
+      setPushPermission(Notification.permission);
+    }
+  }, []);
+
+  const loadNotificationPreferences = async () => {
+    if (!user) return;
+    setIsLoadingPreferences(true);
+    try {
+      const prefs = await notificationPreferencesService.getPreferences();
+      if (prefs) {
+        setNotifications({
+          emailNotifications: prefs.emailNotifications,
+          taskAssignments: prefs.taskAssignments,
+          projectUpdates: prefs.projectUpdates,
+          meetingReminders: prefs.meetingReminders,
+          pushNotifications: prefs.pushNotifications,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load notification preferences:', error);
+    } finally {
+      setIsLoadingPreferences(false);
+    }
+  };
+
+  const handleSaveNotificationPreferences = async () => {
+    if (!user) return;
+    setIsSaving(true);
+    try {
+      await notificationPreferencesService.updatePreferences({
+        emailNotifications: notifications.emailNotifications,
+        taskAssignments: notifications.taskAssignments,
+        projectUpdates: notifications.projectUpdates,
+        meetingReminders: notifications.meetingReminders,
+        pushNotifications: notifications.pushNotifications,
+      });
+
+      // If enabling push notifications, request permission and subscribe
+      if (notifications.pushNotifications && pushSupported && pushPermission !== 'granted') {
+        try {
+          const permission = await pushNotificationService.requestPermission();
+          setPushPermission(permission);
+          
+          if (permission === 'granted') {
+            const subscription = await pushNotificationService.subscribe();
+            if (subscription) {
+              await notificationPreferencesService.updatePreferences({
+                pushSubscription: subscription.toJSON(),
+              });
+              toast({
+                title: 'Success',
+                description: 'Push notifications enabled successfully',
+              });
+            }
+          } else {
+            toast({
+              title: 'Permission Required',
+              description: 'Please allow notifications in your browser settings',
+              variant: 'destructive',
+            });
+            setNotifications({ ...notifications, pushNotifications: false });
+          }
+        } catch (error) {
+          console.error('Failed to enable push notifications:', error);
+          toast({
+            title: 'Error',
+            description: 'Failed to enable push notifications',
+            variant: 'destructive',
+          });
+          setNotifications({ ...notifications, pushNotifications: false });
+        }
+      } else if (!notifications.pushNotifications) {
+        // Unsubscribe if disabling
+        await pushNotificationService.unsubscribe();
+        await notificationPreferencesService.updatePreferences({
+          pushSubscription: null,
+        });
+      }
+
+      toast({
+        title: 'Success',
+        description: 'Notification preferences saved',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to save preferences',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleSaveProfile = async () => {
     if (!user) return;
@@ -155,75 +260,122 @@ export default function Settings() {
               <CardHeader>
                 <CardTitle>Notification Preferences</CardTitle>
                 <CardDescription>
-                  Configure how you receive notifications. Email and push notifications are coming soon.
+                  Configure how you receive notifications
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                  <p className="text-sm text-blue-800">
-                    <strong>Note:</strong> Email and push notification features are not yet implemented. 
-                    In-app notifications are available via the notification bell in the sidebar.
-                  </p>
-                </div>
-                <div className="flex items-center justify-between opacity-60">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="email-notifications" className="cursor-not-allowed">Email Notifications</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Receive notifications via email
-                    </p>
+                {isLoadingPreferences ? (
+                  <div className="text-center py-8">
+                    <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground">Loading preferences...</p>
                   </div>
-                  <Switch
-                    id="email-notifications"
-                    checked={notifications.emailNotifications}
-                    disabled
-                    title="Coming soon"
-                  />
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between opacity-60">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="task-assignments" className="cursor-not-allowed">Task Assignments</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Notify when tasks are assigned to you
-                    </p>
-                  </div>
-                  <Switch
-                    id="task-assignments"
-                    checked={notifications.taskAssignments}
-                    disabled
-                    title="Coming soon"
-                  />
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between opacity-60">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="project-updates" className="cursor-not-allowed">Project Updates</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Notify about project status changes
-                    </p>
-                  </div>
-                  <Switch
-                    id="project-updates"
-                    checked={notifications.projectUpdates}
-                    disabled
-                    title="Coming soon"
-                  />
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between opacity-60">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="meeting-reminders" className="cursor-not-allowed">Meeting Reminders</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Remind you about upcoming meetings
-                    </p>
-                  </div>
-                  <Switch
-                    id="meeting-reminders"
-                    checked={notifications.meetingReminders}
-                    disabled
-                    title="Coming soon"
-                  />
-                </div>
+                ) : (
+                  <>
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                      <p className="text-sm text-blue-800">
+                        <strong>Email Notifications:</strong> To enable email notifications, configure your email service API keys in environment variables (VITE_EMAIL_API_KEY, VITE_EMAIL_API_URL).
+                        <br />
+                        <strong>Push Notifications:</strong> Browser push notifications are available. Enable them below to receive notifications even when the app is closed.
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="email-notifications">Email Notifications</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Receive notifications via email
+                        </p>
+                      </div>
+                      <Switch
+                        id="email-notifications"
+                        checked={notifications.emailNotifications}
+                        onCheckedChange={(checked) =>
+                          setNotifications({ ...notifications, emailNotifications: checked })
+                        }
+                      />
+                    </div>
+                    <Separator />
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="task-assignments">Task Assignments</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Notify when tasks are assigned to you
+                        </p>
+                      </div>
+                      <Switch
+                        id="task-assignments"
+                        checked={notifications.taskAssignments}
+                        onCheckedChange={(checked) =>
+                          setNotifications({ ...notifications, taskAssignments: checked })
+                        }
+                      />
+                    </div>
+                    <Separator />
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="project-updates">Project Updates</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Notify about project status changes
+                        </p>
+                      </div>
+                      <Switch
+                        id="project-updates"
+                        checked={notifications.projectUpdates}
+                        onCheckedChange={(checked) =>
+                          setNotifications({ ...notifications, projectUpdates: checked })
+                        }
+                      />
+                    </div>
+                    <Separator />
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="meeting-reminders">Meeting Reminders</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Remind you about upcoming meetings
+                        </p>
+                      </div>
+                      <Switch
+                        id="meeting-reminders"
+                        checked={notifications.meetingReminders}
+                        onCheckedChange={(checked) =>
+                          setNotifications({ ...notifications, meetingReminders: checked })
+                        }
+                      />
+                    </div>
+                    <Separator />
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="push-notifications">Push Notifications</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Receive browser push notifications
+                          {!pushSupported && (
+                            <span className="text-xs text-orange-600 block mt-1">
+                              Not supported in this browser
+                            </span>
+                          )}
+                          {pushSupported && pushPermission === 'denied' && (
+                            <span className="text-xs text-red-600 block mt-1">
+                              Permission denied. Please enable in browser settings.
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                      <Switch
+                        id="push-notifications"
+                        checked={notifications.pushNotifications}
+                        disabled={!pushSupported || pushPermission === 'denied'}
+                        onCheckedChange={(checked) =>
+                          setNotifications({ ...notifications, pushNotifications: checked })
+                        }
+                      />
+                    </div>
+                    <div className="pt-4">
+                      <Button onClick={handleSaveNotificationPreferences} disabled={isSaving}>
+                        <Save className="h-4 w-4 mr-2" />
+                        {isSaving ? 'Saving...' : 'Save Preferences'}
+                      </Button>
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

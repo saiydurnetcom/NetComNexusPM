@@ -379,7 +379,7 @@ export const tasksService = {
     
     // Normalize the returned data
     const task = result.data;
-    return {
+    const normalizedTask = {
       id: task.id,
       projectId: task.projectId || task.projectid || task.project_id || null,
       title: task.title,
@@ -396,6 +396,41 @@ export const tasksService = {
       reviewerId: task.reviewerId || task.reviewerid || task.reviewer_id || null,
       parentTaskId: task.parentTaskId || task.parenttaskid || task.parent_task_id || null,
     };
+
+    // Trigger notification if task is assigned to someone other than creator
+    if (normalizedTask.assignedTo !== normalizedTask.createdBy) {
+      try {
+        const { notificationTriggerService } = await import('./notification-trigger-service');
+        // Get project name if available
+        let projectName: string | undefined;
+        if (normalizedTask.projectId) {
+          try {
+            const { data: project } = await supabase
+              .from('projects')
+              .select('name')
+              .eq('id', normalizedTask.projectId)
+              .maybeSingle();
+            projectName = project?.name;
+          } catch (e) {
+            // Ignore errors fetching project name
+          }
+        }
+        await notificationTriggerService.triggerNotification({
+          userId: normalizedTask.assignedTo,
+          type: 'task_assigned',
+          title: `New Task Assigned: ${normalizedTask.title}`,
+          message: `You have been assigned a new task: ${normalizedTask.title}`,
+          relatedTaskId: normalizedTask.id,
+          relatedProjectId: normalizedTask.projectId || undefined,
+          metadata: { projectName },
+        });
+      } catch (error) {
+        // Don't fail task creation if notification fails
+        console.error('Failed to trigger notification:', error);
+      }
+    }
+
+    return normalizedTask;
   },
 
   async updateTaskStatus(id: string, status: Task['status']): Promise<Task> {
@@ -1788,7 +1823,7 @@ export const taskCommentsService = {
     if (result.error) throw result.error;
 
     const comment = result.data;
-    return {
+    const normalizedComment = {
       id: comment.id,
       taskId: comment.taskId || comment.taskid || comment.task_id,
       userId: comment.userId || comment.userid || comment.user_id,
@@ -1803,6 +1838,52 @@ export const taskCommentsService = {
         email: comment.users.email,
       } : undefined,
     };
+
+    // Trigger notifications for mentioned users
+    if (normalizedComment.mentionedUserIds && normalizedComment.mentionedUserIds.length > 0) {
+      try {
+        const { notificationTriggerService } = await import('./notification-trigger-service');
+        const commenterName = normalizedComment.user 
+          ? `${normalizedComment.user.firstName} ${normalizedComment.user.lastName}`
+          : 'Someone';
+        
+        // Get task title for notification
+        let taskTitle = 'a task';
+        try {
+          const { data: task } = await supabase
+            .from('tasks')
+            .select('title')
+            .eq('id', normalizedComment.taskId)
+            .maybeSingle();
+          taskTitle = task?.title || 'a task';
+        } catch (e) {
+          // Ignore errors
+        }
+
+        // Send notification to each mentioned user
+        for (const mentionedUserId of normalizedComment.mentionedUserIds) {
+          if (mentionedUserId !== normalizedComment.userId) {
+            await notificationTriggerService.triggerNotification({
+              userId: mentionedUserId,
+              type: 'mention',
+              title: `${commenterName} mentioned you`,
+              message: `${commenterName} mentioned you in a comment on ${taskTitle}`,
+              relatedTaskId: normalizedComment.taskId,
+              relatedCommentId: normalizedComment.id,
+              metadata: {
+                commenterName,
+                taskTitle,
+              },
+            });
+          }
+        }
+      } catch (error) {
+        // Don't fail comment creation if notification fails
+        console.error('Failed to trigger mention notifications:', error);
+      }
+    }
+
+    return normalizedComment;
   },
 
   async updateComment(commentId: string, content: string): Promise<TaskComment> {
