@@ -68,11 +68,17 @@ export default function Dashboard() {
   const yesterdayTime = yesterdayEntries.reduce((total, entry) => total + (entry.durationMinutes || 0), 0);
   const timeDiff = todayTime - yesterdayTime;
 
-  // Get active tasks
-  const activeTasks = tasks.filter(t => t.status === 'in_progress' || t.status === 'todo');
+  // Get tasks by status
+  const inProgressTasks = tasks.filter(t => t.status === 'in_progress');
+  const todoTasks = tasks.filter(t => t.status === 'todo');
   const tasksDueToday = tasks.filter(t => {
+    if (!t.dueDate) return false;
     const dueDate = new Date(t.dueDate).toISOString().split('T')[0];
-    return dueDate === today && t.status !== 'completed';
+    return dueDate === today && t.status !== 'completed' && t.status !== 'in_progress';
+  });
+  const upcomingTasks = todoTasks.filter(t => {
+    // Exclude tasks that are in progress
+    return !inProgressTasks.includes(t);
   });
 
   // Get projects approaching deadline (within 7 days)
@@ -260,7 +266,58 @@ export default function Dashboard() {
         </div>
 
         {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className={`grid grid-cols-1 ${inProgressTasks.length > 0 ? 'lg:grid-cols-3' : 'lg:grid-cols-2'} gap-6`}>
+          {/* In Progress Tasks */}
+          {inProgressTasks.length > 0 && (
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="pb-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-lg font-semibold">In Progress Tasks</CardTitle>
+                    <CardDescription className="mt-1">Tasks you're currently working on</CardDescription>
+                  </div>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => navigate('/tasks')}
+                    className="text-blue-600 hover:text-blue-700"
+                  >
+                    View All
+                    <ArrowRight className="h-4 w-4 ml-1" />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {inProgressTasks.slice(0, 5).map((task) => {
+                    const project = projects.find(p => p.id === task.projectId);
+                    return (
+                      <div 
+                        key={task.id}
+                        className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+                        onClick={() => navigate(`/tasks/${task.id}`)}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h4 className="font-medium text-sm text-gray-900">
+                              {task.title}
+                            </h4>
+                            <Badge variant="default" className="bg-blue-100 text-blue-700 text-xs">
+                              In Progress
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            {project?.name || 'No Project'}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Recent Time Entries */}
           <Card className="border-0 shadow-sm">
             <CardHeader className="pb-4">
@@ -312,9 +369,6 @@ export default function Dashboard() {
                           <p className="text-sm font-medium text-gray-900">
                             {formatTime(entry.durationMinutes || 0)}
                           </p>
-                          {!isActive && (
-                            <p className="text-xs text-gray-500">completed</p>
-                          )}
                         </div>
                       </div>
                     );
@@ -357,23 +411,26 @@ export default function Dashboard() {
               </div>
             </CardHeader>
             <CardContent>
-              {tasksDueToday.length > 0 || activeTasks.length > 0 ? (
+              {tasksDueToday.length > 0 || upcomingTasks.length > 0 ? (
                 <div className="space-y-4">
-                  {[...tasksDueToday, ...activeTasks.filter(t => !tasksDueToday.includes(t))]
+                  {[...tasksDueToday, ...upcomingTasks.filter(t => !tasksDueToday.includes(t))]
                     .slice(0, 5)
                     .map((task) => {
-                      const dueDate = new Date(task.dueDate);
-                      const isToday = dueDate.toISOString().split('T')[0] === today;
-                      const isTomorrow = dueDate.toISOString().split('T')[0] === new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-                      const isOverdue = dueDate < new Date() && task.status !== 'completed';
-                      
                       let dueText = '';
-                      if (isToday) {
-                        dueText = `Today, ${format(dueDate, 'h:mm a')}`;
-                      } else if (isTomorrow) {
-                        dueText = 'Tomorrow';
+                      if (task.dueDate) {
+                        const dueDate = new Date(task.dueDate);
+                        const isToday = dueDate.toISOString().split('T')[0] === today;
+                        const isTomorrow = dueDate.toISOString().split('T')[0] === new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+                        
+                        if (isToday) {
+                          dueText = `Today, ${format(dueDate, 'h:mm a')}`;
+                        } else if (isTomorrow) {
+                          dueText = 'Tomorrow';
+                        } else {
+                          dueText = format(dueDate, 'EEEE');
+                        }
                       } else {
-                        dueText = format(dueDate, 'EEEE');
+                        dueText = 'No due date';
                       }
 
                       const getPriorityColor = (priority: string) => {

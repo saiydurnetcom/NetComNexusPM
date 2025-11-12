@@ -29,6 +29,7 @@ export default function TimeTrackerWidget() {
   const [searchQuery, setSearchQuery] = useState('');
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showInstallButton, setShowInstallButton] = useState(false);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchTasks();
@@ -113,9 +114,16 @@ export default function TimeTrackerWidget() {
     return task ? task.title : 'Unknown Task';
   };
 
-  const handleStartTimer = async (taskId: string) => {
+  const handleTaskSelect = (taskId: string) => {
+    setSelectedTaskId(taskId);
+  };
+
+  const handleStartTimer = async () => {
+    if (!selectedTaskId) return;
+    
     try {
-      await startTimer(taskId);
+      await startTimer(selectedTaskId);
+      setSelectedTaskId(null);
       toast({
         title: 'Timer Started',
         description: 'Time tracking has started',
@@ -127,6 +135,10 @@ export default function TimeTrackerWidget() {
         variant: 'destructive',
       });
     }
+  };
+
+  const handleCancelSelection = () => {
+    setSelectedTaskId(null);
   };
 
   const handleStopTimer = async () => {
@@ -280,6 +292,36 @@ export default function TimeTrackerWidget() {
                 Stop Timer
               </Button>
             </div>
+          ) : selectedTaskId ? (
+            /* Task Selected - Show confirmation */
+            <div className="mb-6 p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
+              <div className="mb-3">
+                <h3 className="font-semibold text-lg mb-1">
+                  {tasks.find(t => t.id === selectedTaskId)?.title || 'Selected Task'}
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  {getProjectName(tasks.find(t => t.id === selectedTaskId)!) || 'No Project'}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleStartTimer}
+                  className="flex-1"
+                  size="lg"
+                >
+                  <Play className="h-4 w-4 mr-2" />
+                  Start Timer
+                </Button>
+                <Button
+                  onClick={handleCancelSelection}
+                  variant="outline"
+                  className="flex-1"
+                  size="lg"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
           ) : (
             /* Task Selection - Show when no timer is active */
             <div className="mb-6">
@@ -309,7 +351,7 @@ export default function TimeTrackerWidget() {
                           key={task.id}
                           variant="outline"
                           className="w-full justify-start h-auto py-3 px-4"
-                          onClick={() => handleStartTimer(task.id)}
+                          onClick={() => handleTaskSelect(task.id)}
                         >
                           <Play className="h-4 w-4 mr-3 text-green-600 flex-shrink-0" />
                           <div className="flex-1 text-left min-w-0">

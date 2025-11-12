@@ -1,8 +1,8 @@
 {
-  "name": "NexusPM - Time Tracker",
+  "name": "NexusPM - Project Management",
   "short_name": "NexusPM",
   "description": "Project Management and Time Tracking Application",
-  "start_url": "/time-tracker-widget",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",

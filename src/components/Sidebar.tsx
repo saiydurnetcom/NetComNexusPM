@@ -11,7 +11,8 @@ import {
   Settings,
   Menu,
   X,
-  Shield
+  Shield,
+  Timer
 } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
@@ -76,6 +77,24 @@ export default function Sidebar() {
 
         {/* Bottom Section */}
         <div className="px-4 py-4 border-t border-gray-800 space-y-2">
+          <Button
+            variant="ghost"
+            className="w-full justify-start gap-3 h-11 text-gray-300 hover:text-white hover:bg-gray-800"
+            onClick={() => {
+              const width = 420;
+              const height = 600;
+              const left = screen.width - width - 20;
+              const top = 20;
+              window.open(
+                '/time-tracker-widget',
+                'TimeTrackerWidget',
+                `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=no,toolbar=no,menubar=no,location=no`
+              );
+            }}
+          >
+            <Timer className="h-5 w-5" />
+            Time Tracker Widget
+          </Button>
           <Link to="/meeting-processor">
             <Button
               variant="ghost"
@@ -152,6 +171,24 @@ export default function Sidebar() {
 
               {/* Bottom Section */}
               <div className="px-4 py-4 border-t border-gray-800 space-y-2">
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start gap-3 h-11 text-gray-300 hover:text-white hover:bg-gray-800"
+                  onClick={() => {
+                    const width = 420;
+                    const height = 600;
+                    const left = screen.width - width - 20;
+                    const top = 20;
+                    window.open(
+                      '/time-tracker-widget',
+                      'TimeTrackerWidget',
+                      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=no,toolbar=no,menubar=no,location=no`
+                    );
+                  }}
+                >
+                  <Timer className="h-5 w-5" />
+                  Time Tracker Widget
+                </Button>
                 <Link to="/meeting-processor">
                   <Button
                     variant="ghost"
