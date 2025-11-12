@@ -146,11 +146,14 @@ export default function Sidebar() {
           <SheetContent side="left" className="w-64 bg-gray-900 text-white p-0">
             <div className="flex flex-col h-full">
               {/* Logo */}
-              <div className="flex items-center gap-3 px-6 py-5 border-b border-gray-800">
-                <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-blue-600">
-                  <Clock className="h-6 w-6 text-white" />
+              <div className="flex items-center justify-between gap-3 px-6 py-5 border-b border-gray-800">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-blue-600">
+                    <Clock className="h-6 w-6 text-white" />
+                  </div>
+                  <span className="text-xl font-bold">NexusPM</span>
                 </div>
-                <span className="text-xl font-bold">NexusPM</span>
+                <NotificationBell />
               </div>
 
               {/* Navigation */}

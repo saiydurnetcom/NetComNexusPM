@@ -16,6 +16,8 @@ import { useProjects } from '@/hooks/useProjects';
 import { useTimeTracking } from '@/hooks/useTimeTracking';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/components/ui/use-toast';
+import { useTaskDependencies } from '@/hooks/useTaskDependencies';
+import { useTaskComments } from '@/hooks/useTaskComments';
 import { usersService } from '@/lib/users-service';
 import { supabase } from '@/lib/supabase';
 import { Task, User, TaskAttachment, TimeEntry } from '@/types';
@@ -1113,9 +1115,312 @@ export default function TaskDetail() {
                 </Button>
               </CardContent>
             </Card>
+
+            {/* Dependencies */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Dependencies</CardTitle>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsDependencyDialogOpen(true)}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Dependency
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {dependencies.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No dependencies</p>
+                ) : (
+                  <div className="space-y-2">
+                    {dependencies.map((dep) => {
+                      const depTask = tasks.find(t => t.id === dep.dependsOnTaskId);
+                      return (
+                        <div key={dep.id} className="flex items-center justify-between p-2 border rounded-lg">
+                          <div className="flex-1">
+                            <p className="text-sm font-medium">
+                              {depTask ? depTask.title : `Task ${dep.dependsOnTaskId.substring(0, 8)}...`}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {dep.dependencyType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                            </p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={async () => {
+                              try {
+                                await deleteDependency(dep.id);
+                                toast({
+                                  title: 'Success',
+                                  description: 'Dependency removed',
+                                });
+                              } catch (error) {
+                                toast({
+                                  title: 'Error',
+                                  description: 'Failed to remove dependency',
+                                  variant: 'destructive',
+                                });
+                              }
+                            }}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Sub-tasks */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Sub-tasks</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {tasks.filter(t => t.parentTaskId === task.id).length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No sub-tasks</p>
+                ) : (
+                  <div className="space-y-2">
+                    {tasks.filter(t => t.parentTaskId === task.id).map((subTask) => (
+                      <div
+                        key={subTask.id}
+                        className="p-2 border rounded-lg cursor-pointer hover:bg-gray-50"
+                        onClick={() => navigate(`/tasks/${subTask.id}`)}
+                      >
+                        <p className="text-sm font-medium">{subTask.title}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <Badge variant="outline" className="text-xs">
+                            {subTask.status}
+                          </Badge>
+                          <Badge variant="outline" className="text-xs">
+                            {subTask.priority}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Comments */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Comments</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Textarea
+                    placeholder="Add a comment..."
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    rows={3}
+                  />
+                  <Button
+                    size="sm"
+                    onClick={async () => {
+                      if (!newComment.trim() || !id) return;
+                      try {
+                        await createComment({
+                          taskId: id,
+                          content: newComment,
+                        });
+                        setNewComment('');
+                        toast({
+                          title: 'Success',
+                          description: 'Comment added',
+                        });
+                      } catch (error) {
+                        toast({
+                          title: 'Error',
+                          description: error instanceof Error ? error.message : 'Failed to add comment',
+                          variant: 'destructive',
+                        });
+                      }
+                    }}
+                    disabled={!newComment.trim()}
+                  >
+                    Post Comment
+                  </Button>
+                </div>
+                <Separator />
+                <div className="space-y-4">
+                  {comments.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No comments yet</p>
+                  ) : (
+                    comments.map((comment) => (
+                      <div key={comment.id} className="space-y-2">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <UserIcon className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-sm font-medium">
+                                {comment.user ? `${comment.user.firstName} ${comment.user.lastName}` : 'Unknown User'}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {format(new Date(comment.createdAt), 'MMM dd, yyyy h:mm a')}
+                              </span>
+                            </div>
+                            {editingCommentId === comment.id ? (
+                              <div className="space-y-2">
+                                <Textarea
+                                  value={editCommentContent}
+                                  onChange={(e) => setEditCommentContent(e.target.value)}
+                                  rows={2}
+                                />
+                                <div className="flex gap-2">
+                                  <Button
+                                    size="sm"
+                                    onClick={async () => {
+                                      try {
+                                        await updateComment(comment.id, editCommentContent);
+                                        setEditingCommentId(null);
+                                        setEditCommentContent('');
+                                        toast({
+                                          title: 'Success',
+                                          description: 'Comment updated',
+                                        });
+                                      } catch (error) {
+                                        toast({
+                                          title: 'Error',
+                                          description: 'Failed to update comment',
+                                          variant: 'destructive',
+                                        });
+                                      }
+                                    }}
+                                  >
+                                    Save
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setEditingCommentId(null);
+                                      setEditCommentContent('');
+                                    }}
+                                  >
+                                    Cancel
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-sm text-gray-700 whitespace-pre-wrap">{comment.content}</p>
+                            )}
+                          </div>
+                          {comment.userId === currentUser?.id && editingCommentId !== comment.id && (
+                            <div className="flex gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setEditingCommentId(comment.id);
+                                  setEditCommentContent(comment.content);
+                                }}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={async () => {
+                                  try {
+                                    await deleteComment(comment.id);
+                                    toast({
+                                      title: 'Success',
+                                      description: 'Comment deleted',
+                                    });
+                                  } catch (error) {
+                                    toast({
+                                      title: 'Error',
+                                      description: 'Failed to delete comment',
+                                      variant: 'destructive',
+                                    });
+                                  }
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4 text-red-600" />
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                        {comment.id !== comments[comments.length - 1]?.id && <Separator />}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>
+
+      {/* Add Dependency Dialog */}
+      <Dialog open={isDependencyDialogOpen} onOpenChange={setIsDependencyDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Dependency</DialogTitle>
+            <DialogDescription>
+              Select a task that this task depends on
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Dependent Task</Label>
+              <Select value={selectedDependencyTask} onValueChange={setSelectedDependencyTask}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a task" />
+                </SelectTrigger>
+                <SelectContent>
+                  {tasks
+                    .filter(t => t.id !== task.id && !dependencies.some(d => d.dependsOnTaskId === t.id))
+                    .map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.title}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsDependencyDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={async () => {
+                  if (!selectedDependencyTask || !id) return;
+                  try {
+                    await createDependency({
+                      taskId: id,
+                      dependsOnTaskId: selectedDependencyTask,
+                    });
+                    setSelectedDependencyTask('');
+                    setIsDependencyDialogOpen(false);
+                    toast({
+                      title: 'Success',
+                      description: 'Dependency added',
+                    });
+                  } catch (error) {
+                    toast({
+                      title: 'Error',
+                      description: error instanceof Error ? error.message : 'Failed to add dependency',
+                      variant: 'destructive',
+                    });
+                  }
+                }}
+                disabled={!selectedDependencyTask}
+              >
+                Add
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Manual Time Entry Dialog */}
       <Dialog open={isManualEntryOpen} onOpenChange={setIsManualEntryOpen}>

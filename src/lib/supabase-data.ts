@@ -1887,36 +1887,38 @@ export const notificationsService = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
 
+    // Try different column name variations
     let query = supabase
       .from('notifications')
       .select('*')
-      .eq('userid', user.id)
-      .order('createdat', { ascending: false })
+      .eq('userId', user.id)
+      .order('createdAt', { ascending: false })
       .limit(100);
-
+    
     if (unreadOnly) {
       query = query.eq('read', false);
     }
-
+    
     let result = await query;
-
+    
     if (result.error && (
       result.error.code === 'PGRST204' || 
       result.error.code === '42703' ||
       result.error.status === 400 ||
-      result.error.message?.includes('column')
+      result.error.message?.includes('column') ||
+      result.error.message?.includes('userid')
     )) {
       query = supabase
         .from('notifications')
         .select('*')
-        .eq('userId', user.id)
-        .order('createdAt', { ascending: false })
+        .eq('userid', user.id)
+        .order('createdat', { ascending: false })
         .limit(100);
-
+      
       if (unreadOnly) {
         query = query.eq('read', false);
       }
-
+      
       result = await query;
     }
 
@@ -1945,25 +1947,26 @@ export const notificationsService = {
       .from('notifications')
       .update({
         read: true,
-        readat: new Date().toISOString(),
+        readAt: new Date().toISOString(),
       })
       .eq('id', notificationId)
-      .eq('userid', user.id);
+      .eq('userId', user.id);
 
     if (result.error && (
       result.error.code === 'PGRST204' || 
       result.error.code === '42703' ||
       result.error.status === 400 ||
-      result.error.message?.includes('column')
+      result.error.message?.includes('column') ||
+      result.error.message?.includes('userid')
     )) {
       result = await supabase
         .from('notifications')
         .update({
           read: true,
-          readAt: new Date().toISOString(),
+          readat: new Date().toISOString(),
         })
         .eq('id', notificationId)
-        .eq('userId', user.id);
+        .eq('userid', user.id);
     }
 
     if (result.error) throw result.error;
@@ -2011,22 +2014,21 @@ export const notificationsService = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
 
-    const { error } = await supabase
+    let result = await supabase
       .from('notifications')
       .delete()
       .eq('id', notificationId)
-      .eq('userid', user.id);
+      .eq('userId', user.id);
 
-    if (error && (error.code === '42703' || error.message?.includes('userid'))) {
-      const result = await supabase
+    if (result.error && (result.error.code === '42703' || result.error.message?.includes('userid') || result.error.status === 400)) {
+      result = await supabase
         .from('notifications')
         .delete()
         .eq('id', notificationId)
-        .eq('userId', user.id);
-      if (result.error) throw result.error;
-    } else if (error) {
-      throw error;
+        .eq('userid', user.id);
     }
+
+    if (result.error) throw result.error;
   },
 };
 
