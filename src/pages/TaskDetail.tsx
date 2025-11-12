@@ -109,14 +109,14 @@ export default function TaskDetail() {
     if (!id) return;
     setIsLoading(true);
     try {
-      // Try lowercase first
+      // Try camelCase first (migrations use quoted identifiers)
       let result = await supabase
         .from('tasks')
-        .select('id, projectid, title, description, status, priority, estimatedhours, assignedto, createdby, duedate, createdat, updatedat, meetingid, reviewerid, parenttaskid')
+        .select('id, projectId, title, description, status, priority, estimatedHours, assignedTo, createdBy, dueDate, createdAt, updatedAt, meetingId, reviewerId, parentTaskId')
         .eq('id', id)
         .single();
       
-      // If lowercase fails, try camelCase
+      // If camelCase fails, try lowercase (PostgreSQL lowercases unquoted identifiers)
       if (result.error && (
         result.error.code === 'PGRST204' || 
         result.error.code === '42703' ||
@@ -126,7 +126,7 @@ export default function TaskDetail() {
       )) {
         result = await supabase
           .from('tasks')
-          .select('id, projectId, title, description, status, priority, estimatedHours, assignedTo, createdBy, dueDate, createdAt, updatedAt, meetingId, reviewerId, parentTaskId')
+          .select('id, projectid, title, description, status, priority, estimatedhours, assignedto, createdby, duedate, createdat, updatedat, meetingid, reviewerid, parenttaskid')
           .eq('id', id)
           .single();
       }
@@ -238,14 +238,14 @@ export default function TaskDetail() {
   const loadAttachments = async () => {
     if (!id) return;
     try {
-      // Try lowercase first
+      // Try camelCase first (migrations use quoted identifiers)
       let result = await supabase
         .from('task_attachments')
-        .select('id, taskid, filename, filesize, filetype, filepath, uploadedby, createdat')
-        .eq('taskid', id)
-        .order('createdat', { ascending: false });
+        .select('id, taskId, fileName, fileSize, fileType, filePath, uploadedBy, createdAt')
+        .eq('taskId', id)
+        .order('createdAt', { ascending: false });
       
-      // If lowercase fails, try camelCase
+      // If camelCase fails, try lowercase (PostgreSQL lowercases unquoted identifiers)
       if (result.error && (
         result.error.code === 'PGRST204' || 
         result.error.code === '42703' ||
@@ -255,9 +255,9 @@ export default function TaskDetail() {
       )) {
         result = await supabase
           .from('task_attachments')
-          .select('id, taskId, fileName, fileSize, fileType, filePath, uploadedBy, createdAt')
-          .eq('taskId', id)
-          .order('createdAt', { ascending: false });
+          .select('id, taskid, filename, filesize, filetype, filepath, uploadedby, createdat')
+          .eq('taskid', id)
+          .order('createdat', { ascending: false });
       }
       
       // If that also fails, try select('*')

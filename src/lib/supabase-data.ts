@@ -938,14 +938,14 @@ export const meetingsService = {
   },
 
   async getMeetingSuggestions(meetingId: string): Promise<AISuggestion[]> {
-    // Try lowercase first (PostgreSQL lowercases unquoted identifiers)
+    // Try camelCase first (migrations use quoted identifiers)
     let result = await supabase
       .from('ai_suggestions')
-      .select('id, meetingid, originaltext, suggestedtask, suggesteddescription, confidencescore, status, reviewedby, reviewedat, rejectionreason, createdat')
-      .eq('meetingid', meetingId)
-      .order('createdat', { ascending: false });
+      .select('id, meetingId, originalText, suggestedTask, suggestedDescription, confidenceScore, status, reviewedBy, reviewedAt, rejectionReason, createdAt')
+      .eq('meetingId', meetingId)
+      .order('createdAt', { ascending: false });
     
-    // If lowercase fails, try camelCase
+    // If camelCase fails, try lowercase (PostgreSQL lowercases unquoted identifiers)
     // Check for column-related errors: PGRST204, 400 status, or column name in error message
     if (result.error && (
       result.error.code === 'PGRST204' || 
@@ -956,9 +956,9 @@ export const meetingsService = {
     )) {
       result = await supabase
         .from('ai_suggestions')
-        .select('id, meetingId, originalText, suggestedTask, suggestedDescription, confidenceScore, status, reviewedBy, reviewedAt, rejectionReason, createdAt')
-        .eq('meetingId', meetingId)
-        .order('createdAt', { ascending: false });
+        .select('id, meetingid, originaltext, suggestedtask, suggesteddescription, confidencescore, status, reviewedby, reviewedat, rejectionreason, createdat')
+        .eq('meetingid', meetingId)
+        .order('createdat', { ascending: false });
     }
     
     // If that also fails, try select('*')
@@ -1031,14 +1031,14 @@ export const meetingsService = {
 // AI Suggestions (using mock for now, but structure ready for real implementation)
 export const aiSuggestionsService = {
   async getSuggestions(): Promise<AISuggestion[]> {
-    // Try lowercase first (PostgreSQL lowercases unquoted identifiers)
+    // Try camelCase first (migrations use quoted identifiers)
     let result = await supabase
       .from('ai_suggestions')
-      .select('id, meetingid, originaltext, suggestedtask, suggesteddescription, confidencescore, status, reviewedby, reviewedat, rejectionreason, createdat')
+      .select('id, meetingId, originalText, suggestedTask, suggestedDescription, confidenceScore, status, reviewedBy, reviewedAt, rejectionReason, createdAt')
       .eq('status', 'pending')
-      .order('createdat', { ascending: false });
+      .order('createdAt', { ascending: false });
     
-    // If lowercase fails, try camelCase
+    // If camelCase fails, try lowercase (PostgreSQL lowercases unquoted identifiers)
     // Check for column-related errors: PGRST204, 400 status, or column name in error message
     if (result.error && (
       result.error.code === 'PGRST204' || 
@@ -1049,9 +1049,9 @@ export const aiSuggestionsService = {
     )) {
       result = await supabase
         .from('ai_suggestions')
-        .select('id, meetingId, originalText, suggestedTask, suggestedDescription, confidenceScore, status, reviewedBy, reviewedAt, rejectionReason, createdAt')
+        .select('id, meetingid, originaltext, suggestedtask, suggesteddescription, confidencescore, status, reviewedby, reviewedat, rejectionreason, createdat')
         .eq('status', 'pending')
-        .order('createdAt', { ascending: false });
+        .order('createdat', { ascending: false });
     }
     
     // If that also fails, try select('*')
@@ -1618,19 +1618,19 @@ export const projectReportsService = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
 
+    // Try camelCase first (migrations use quoted identifiers)
     let query = supabase
       .from('project_reports')
       .select('*')
-      .order('createdat', { ascending: false });
+      .order('createdAt', { ascending: false });
 
     if (projectId) {
-      query = query.eq('projectid', projectId);
+      query = query.eq('projectId', projectId);
     }
 
-    // Try lowercase first
     let result = await query;
 
-    // If that fails, try camelCase
+    // If camelCase fails, try lowercase (PostgreSQL lowercases unquoted identifiers)
     if (result.error && (
       result.error.code === 'PGRST204' || 
       result.error.code === '42703' ||
@@ -1640,10 +1640,10 @@ export const projectReportsService = {
       query = supabase
         .from('project_reports')
         .select('*')
-        .order('createdAt', { ascending: false });
+        .order('createdat', { ascending: false });
 
       if (projectId) {
-        query = query.eq('projectId', projectId);
+        query = query.eq('projectid', projectId);
       }
 
       result = await query;
@@ -1673,22 +1673,22 @@ export const projectReportsService = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
 
-    // Try lowercase first
+    // Try camelCase first (migrations use quoted identifiers)
     let result = await supabase
       .from('project_reports')
       .insert({
-        projectid: data.projectId,
+        projectId: data.projectId,
         title: data.title,
         content: data.content,
-        reporttype: data.reportType || 'cxo',
-        generatedby: user.id,
-        createdat: new Date().toISOString(),
-        updatedat: new Date().toISOString(),
+        reportType: data.reportType || 'cxo',
+        generatedBy: user.id,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       })
       .select('*')
       .single();
 
-    // If that fails, try camelCase
+    // If camelCase fails, try lowercase (PostgreSQL lowercases unquoted identifiers)
     if (result.error && (
       result.error.code === 'PGRST204' || 
       result.error.code === '42703' ||
@@ -1698,13 +1698,13 @@ export const projectReportsService = {
       result = await supabase
         .from('project_reports')
         .insert({
-          projectId: data.projectId,
+          projectid: data.projectId,
           title: data.title,
           content: data.content,
-          reportType: data.reportType || 'cxo',
-          generatedBy: user.id,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
+          reporttype: data.reportType || 'cxo',
+          generatedby: user.id,
+          createdat: new Date().toISOString(),
+          updatedat: new Date().toISOString(),
         })
         .select('*')
         .single();
@@ -1746,10 +1746,11 @@ export const taskDependenciesService = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
 
+    // Try camelCase first (migrations use quoted identifiers)
     let result = await supabase
       .from('task_dependencies')
       .select('*')
-      .eq('taskid', taskId);
+      .eq('taskId', taskId);
 
     if (result.error && (
       result.error.code === 'PGRST204' || 
@@ -1760,7 +1761,7 @@ export const taskDependenciesService = {
       result = await supabase
         .from('task_dependencies')
         .select('*')
-        .eq('taskId', taskId);
+        .eq('taskid', taskId);
     }
 
     if (result.error) throw result.error;
@@ -1782,12 +1783,13 @@ export const taskDependenciesService = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
 
+    // Try camelCase first (migrations use quoted identifiers)
     let result = await supabase
       .from('task_dependencies')
       .insert({
-        taskid: data.taskId,
-        dependson_task_id: data.dependsOnTaskId,
-        dependencytype: data.dependencyType || 'finish_to_start',
+        taskId: data.taskId,
+        dependsOnTaskId: data.dependsOnTaskId,
+        dependencyType: data.dependencyType || 'finish_to_start',
       })
       .select('*')
       .single();
@@ -1801,9 +1803,9 @@ export const taskDependenciesService = {
       result = await supabase
         .from('task_dependencies')
         .insert({
-          taskId: data.taskId,
-          dependsOnTaskId: data.dependsOnTaskId,
-          dependencyType: data.dependencyType || 'finish_to_start',
+          taskid: data.taskId,
+          dependson_task_id: data.dependsOnTaskId,
+          dependencytype: data.dependencyType || 'finish_to_start',
         })
         .select('*')
         .single();
@@ -1834,11 +1836,12 @@ export const taskDependenciesService = {
 // Task Comments Service
 export const taskCommentsService = {
   async getComments(taskId: string): Promise<TaskComment[]> {
+    // Try camelCase first (migrations use quoted identifiers)
     let result = await supabase
       .from('task_comments')
       .select('*, users(id, firstName, lastName, email)')
-      .eq('taskid', taskId)
-      .order('createdat', { ascending: false });
+      .eq('taskId', taskId)
+      .order('createdAt', { ascending: false });
 
     if (result.error && (
       result.error.code === 'PGRST204' || 
@@ -1849,8 +1852,8 @@ export const taskCommentsService = {
       result = await supabase
         .from('task_comments')
         .select('*, users(id, firstName, lastName, email)')
-        .eq('taskId', taskId)
-        .order('createdAt', { ascending: false });
+        .eq('taskid', taskId)
+        .order('createdat', { ascending: false });
     }
 
     if (result.error) throw result.error;

@@ -890,6 +890,461 @@ export default function ProjectDetail() {
                   </div>
                 )}
               </TabsContent>
+
+              <TabsContent value="risks" className="space-y-4 mt-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold">Project Risks</h3>
+                    <p className="text-sm text-muted-foreground">Identify and track potential risks to your project</p>
+                  </div>
+                  <Button onClick={() => {
+                    setEditingRisk(null);
+                    setRiskForm({
+                      title: '',
+                      description: '',
+                      riskCategory: 'technical',
+                      probability: 'medium',
+                      impact: 'medium',
+                      status: 'identified',
+                      mitigationStrategy: '',
+                      mitigationOwner: '',
+                      targetMitigationDate: '',
+                    });
+                    setIsRiskDialogOpen(true);
+                  }}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Risk
+                  </Button>
+                </div>
+                {risks.length === 0 ? (
+                  <div className="text-center py-12">
+                    <AlertTriangle className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+                    <h3 className="text-lg font-semibold mb-2">No risks identified</h3>
+                    <p className="text-muted-foreground mb-4">Start tracking potential risks to your project</p>
+                    <Button onClick={() => {
+                      setEditingRisk(null);
+                      setRiskForm({
+                        title: '',
+                        description: '',
+                        riskCategory: 'technical',
+                        probability: 'medium',
+                        impact: 'medium',
+                        status: 'identified',
+                        mitigationStrategy: '',
+                        mitigationOwner: '',
+                        targetMitigationDate: '',
+                      });
+                      setIsRiskDialogOpen(true);
+                    }}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add First Risk
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {risks.map((risk) => (
+                      <Card key={risk.id}>
+                        <CardHeader>
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <CardTitle className="flex items-center gap-2">
+                                {risk.title}
+                                <Badge variant={risk.status === 'closed' ? 'secondary' : risk.status === 'mitigated' ? 'default' : 'destructive'}>
+                                  {risk.status}
+                                </Badge>
+                                <Badge variant="outline">{risk.riskCategory}</Badge>
+                              </CardTitle>
+                              <CardDescription className="mt-2">{risk.description}</CardDescription>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setEditingRisk(risk);
+                                  setRiskForm({
+                                    title: risk.title,
+                                    description: risk.description || '',
+                                    riskCategory: risk.riskCategory,
+                                    probability: risk.probability,
+                                    impact: risk.impact,
+                                    status: risk.status,
+                                    mitigationStrategy: risk.mitigationStrategy || '',
+                                    mitigationOwner: risk.mitigationOwner || '',
+                                    targetMitigationDate: risk.targetMitigationDate ? new Date(risk.targetMitigationDate).toISOString().split('T')[0] : '',
+                                  });
+                                  setIsRiskDialogOpen(true);
+                                }}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={async () => {
+                                  if (confirm('Are you sure you want to delete this risk?')) {
+                                    try {
+                                      await projectRisksService.deleteRisk(risk.id);
+                                      await loadRisks();
+                                      toast({ title: 'Success', description: 'Risk deleted' });
+                                    } catch (error) {
+                                      toast({
+                                        title: 'Error',
+                                        description: error instanceof Error ? error.message : 'Failed to delete risk',
+                                        variant: 'destructive',
+                                      });
+                                    }
+                                  }
+                                }}
+                                className="text-red-600 hover:text-red-700"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                            <div>
+                              <Label className="text-xs text-muted-foreground">Probability</Label>
+                              <p className="font-medium">{risk.probability}</p>
+                            </div>
+                            <div>
+                              <Label className="text-xs text-muted-foreground">Impact</Label>
+                              <p className="font-medium">{risk.impact}</p>
+                            </div>
+                            <div>
+                              <Label className="text-xs text-muted-foreground">Risk Score</Label>
+                              <p className="font-medium">{risk.riskScore}</p>
+                            </div>
+                            <div>
+                              <Label className="text-xs text-muted-foreground">Category</Label>
+                              <p className="font-medium">{risk.riskCategory}</p>
+                            </div>
+                          </div>
+                          {risk.mitigationStrategy && (
+                            <div className="mt-4">
+                              <Label className="text-xs text-muted-foreground">Mitigation Strategy</Label>
+                              <p className="text-sm mt-1">{risk.mitigationStrategy}</p>
+                            </div>
+                          )}
+                          {risk.mitigationOwner && (
+                            <div className="mt-2">
+                              <Label className="text-xs text-muted-foreground">Mitigation Owner</Label>
+                              <p className="text-sm mt-1">
+                                {availableUsers.find(u => u.id === risk.mitigationOwner)?.firstName} {availableUsers.find(u => u.id === risk.mitigationOwner)?.lastName}
+                              </p>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="budget" className="space-y-4 mt-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold">Project Budget</h3>
+                    <p className="text-sm text-muted-foreground">Track budget items and actual spending</p>
+                  </div>
+                  <Button onClick={() => {
+                    setEditingBudgetItem(null);
+                    setBudgetForm({
+                      category: '',
+                      description: '',
+                      budgetedAmount: 0,
+                      actualAmount: 0,
+                      currency: 'USD',
+                    });
+                    setIsBudgetDialogOpen(true);
+                  }}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Budget Item
+                  </Button>
+                </div>
+                {budgetItems.length === 0 ? (
+                  <div className="text-center py-12">
+                    <DollarSign className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+                    <h3 className="text-lg font-semibold mb-2">No budget items</h3>
+                    <p className="text-muted-foreground mb-4">Start tracking your project budget</p>
+                    <Button onClick={() => {
+                      setEditingBudgetItem(null);
+                      setBudgetForm({
+                        category: '',
+                        description: '',
+                        budgetedAmount: 0,
+                        actualAmount: 0,
+                        currency: 'USD',
+                      });
+                      setIsBudgetDialogOpen(true);
+                    }}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add First Budget Item
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                      <Card>
+                        <CardContent className="pt-6">
+                          <div className="text-sm text-muted-foreground">Total Budgeted</div>
+                          <div className="text-2xl font-bold">
+                            {budgetItems.reduce((sum, item) => sum + item.budgetedAmount, 0).toLocaleString('en-US', {
+                              style: 'currency',
+                              currency: budgetItems[0]?.currency || 'USD',
+                            })}
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardContent className="pt-6">
+                          <div className="text-sm text-muted-foreground">Total Actual</div>
+                          <div className="text-2xl font-bold">
+                            {budgetItems.reduce((sum, item) => sum + item.actualAmount, 0).toLocaleString('en-US', {
+                              style: 'currency',
+                              currency: budgetItems[0]?.currency || 'USD',
+                            })}
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardContent className="pt-6">
+                          <div className="text-sm text-muted-foreground">Remaining</div>
+                          <div className="text-2xl font-bold">
+                            {(budgetItems.reduce((sum, item) => sum + item.budgetedAmount, 0) - budgetItems.reduce((sum, item) => sum + item.actualAmount, 0)).toLocaleString('en-US', {
+                              style: 'currency',
+                              currency: budgetItems[0]?.currency || 'USD',
+                            })}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Category</TableHead>
+                          <TableHead>Description</TableHead>
+                          <TableHead className="text-right">Budgeted</TableHead>
+                          <TableHead className="text-right">Actual</TableHead>
+                          <TableHead className="text-right">Variance</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {budgetItems.map((item) => {
+                          const variance = item.budgetedAmount - item.actualAmount;
+                          return (
+                            <TableRow key={item.id}>
+                              <TableCell className="font-medium">{item.category}</TableCell>
+                              <TableCell>{item.description || '-'}</TableCell>
+                              <TableCell className="text-right">
+                                {item.budgetedAmount.toLocaleString('en-US', {
+                                  style: 'currency',
+                                  currency: item.currency,
+                                })}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {item.actualAmount.toLocaleString('en-US', {
+                                  style: 'currency',
+                                  currency: item.currency,
+                                })}
+                              </TableCell>
+                              <TableCell className={`text-right ${variance < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                {variance.toLocaleString('en-US', {
+                                  style: 'currency',
+                                  currency: item.currency,
+                                })}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex justify-end gap-2">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      setEditingBudgetItem(item);
+                                      setBudgetForm({
+                                        category: item.category,
+                                        description: item.description || '',
+                                        budgetedAmount: item.budgetedAmount,
+                                        actualAmount: item.actualAmount,
+                                        currency: item.currency,
+                                      });
+                                      setIsBudgetDialogOpen(true);
+                                    }}
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={async () => {
+                                      if (confirm('Are you sure you want to delete this budget item?')) {
+                                        try {
+                                          await projectBudgetService.deleteBudgetItem(item.id);
+                                          await loadBudgetItems();
+                                          toast({ title: 'Success', description: 'Budget item deleted' });
+                                        } catch (error) {
+                                          toast({
+                                            title: 'Error',
+                                            description: error instanceof Error ? error.message : 'Failed to delete budget item',
+                                            variant: 'destructive',
+                                          });
+                                        }
+                                      }
+                                    }}
+                                    className="text-red-600 hover:text-red-700"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="milestones" className="space-y-4 mt-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold">Project Milestones</h3>
+                    <p className="text-sm text-muted-foreground">Track key project milestones and deadlines</p>
+                  </div>
+                  <Button onClick={() => {
+                    setEditingMilestone(null);
+                    setMilestoneForm({
+                      name: '',
+                      description: '',
+                      targetDate: '',
+                    });
+                    setIsMilestoneDialogOpen(true);
+                  }}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Milestone
+                  </Button>
+                </div>
+                {milestones.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Flag className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+                    <h3 className="text-lg font-semibold mb-2">No milestones</h3>
+                    <p className="text-muted-foreground mb-4">Define key milestones for your project</p>
+                    <Button onClick={() => {
+                      setEditingMilestone(null);
+                      setMilestoneForm({
+                        name: '',
+                        description: '',
+                        targetDate: '',
+                      });
+                      setIsMilestoneDialogOpen(true);
+                    }}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add First Milestone
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {milestones.map((milestone) => (
+                      <Card key={milestone.id}>
+                        <CardHeader>
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <CardTitle className="flex items-center gap-2">
+                                {milestone.name}
+                                <Badge variant={milestone.status === 'completed' ? 'default' : milestone.status === 'overdue' ? 'destructive' : 'secondary'}>
+                                  {milestone.status}
+                                </Badge>
+                              </CardTitle>
+                              <CardDescription className="mt-2">{milestone.description}</CardDescription>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setEditingMilestone(milestone);
+                                  setMilestoneForm({
+                                    name: milestone.name,
+                                    description: milestone.description || '',
+                                    targetDate: milestone.targetDate ? new Date(milestone.targetDate).toISOString().split('T')[0] : '',
+                                  });
+                                  setIsMilestoneDialogOpen(true);
+                                }}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={async () => {
+                                  if (confirm('Are you sure you want to delete this milestone?')) {
+                                    try {
+                                      await projectMilestonesService.deleteMilestone(milestone.id);
+                                      await loadMilestones();
+                                      toast({ title: 'Success', description: 'Milestone deleted' });
+                                    } catch (error) {
+                                      toast({
+                                        title: 'Error',
+                                        description: error instanceof Error ? error.message : 'Failed to delete milestone',
+                                        variant: 'destructive',
+                                      });
+                                    }
+                                  }
+                                }}
+                                className="text-red-600 hover:text-red-700"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <Label className="text-xs text-muted-foreground">Target Date</Label>
+                              <p className="font-medium">
+                                {milestone.targetDate ? format(new Date(milestone.targetDate), 'MMMM dd, yyyy') : 'Not set'}
+                              </p>
+                            </div>
+                            {milestone.completedDate && (
+                              <div>
+                                <Label className="text-xs text-muted-foreground">Completed Date</Label>
+                                <p className="font-medium">
+                                  {format(new Date(milestone.completedDate), 'MMMM dd, yyyy')}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="gantt" className="space-y-4 mt-4">
+                <div>
+                  <h3 className="text-lg font-semibold mb-2">Gantt Chart</h3>
+                  <p className="text-sm text-muted-foreground mb-4">Visualize task timelines and dependencies</p>
+                  {projectTasks.length === 0 ? (
+                    <div className="text-center py-12">
+                      <BarChart3 className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+                      <h3 className="text-lg font-semibold mb-2">No tasks to display</h3>
+                      <p className="text-muted-foreground mb-4">Create tasks with due dates to see them on the Gantt chart</p>
+                    </div>
+                  ) : (
+                    <GanttChart
+                      tasks={projectTasks}
+                      startDate={currentProject?.startDate ? new Date(currentProject.startDate) : undefined}
+                      endDate={currentProject?.endDate ? new Date(currentProject.endDate) : undefined}
+                    />
+                  )}
+                </div>
+              </TabsContent>
             </Tabs>
         </CardContent>
       </Card>

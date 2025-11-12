@@ -110,14 +110,14 @@ export default function MeetingDetail() {
         setSuggestions(suggestionsData);
         
         // Find tasks that were created from this meeting
-        // Try lowercase first
+        // Try camelCase first (migrations use quoted identifiers)
         let tasksResult = await supabase
           .from('tasks')
-          .select('id, projectid, title, description, status, priority, estimatedhours, assignedto, createdby, duedate, createdat, updatedat, meetingid, reviewerid')
-          .eq('meetingid', id)
-          .order('createdat', { ascending: false });
+          .select('id, projectId, title, description, status, priority, estimatedHours, assignedTo, createdBy, dueDate, createdAt, updatedAt, meetingId, reviewerId')
+          .eq('meetingId', id)
+          .order('createdAt', { ascending: false });
         
-        // If lowercase fails, try camelCase
+        // If camelCase fails, try lowercase (PostgreSQL lowercases unquoted identifiers)
         if (tasksResult.error && (
           tasksResult.error.code === 'PGRST204' || 
           tasksResult.error.code === '42703' ||
@@ -127,9 +127,9 @@ export default function MeetingDetail() {
         )) {
           tasksResult = await supabase
             .from('tasks')
-            .select('id, projectId, title, description, status, priority, estimatedHours, assignedTo, createdBy, dueDate, createdAt, updatedAt, meetingId, reviewerId')
-            .eq('meetingId', id)
-            .order('createdAt', { ascending: false });
+            .select('id, projectid, title, description, status, priority, estimatedhours, assignedto, createdby, duedate, createdat, updatedat, meetingid, reviewerid')
+            .eq('meetingid', id)
+            .order('createdat', { ascending: false });
         }
         
         // If that also fails, try select('*')
