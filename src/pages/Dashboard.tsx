@@ -120,15 +120,15 @@ export default function Dashboard() {
 
         // Get available hours for this week (default 40)
         const weekStartStr = weekStart.toISOString().split('T')[0];
-        // Try lowercase first
+        // Try camelCase first
         let weeklyResult = await supabase
           .from('user_weekly_hours')
-          .select('availablehours')
-          .eq('userid', user.id)
-          .eq('weekstartdate', weekStartStr)
+          .select('availableHours')
+          .eq('userId', user.id)
+          .eq('weekStartDate', weekStartStr)
           .maybeSingle();
         
-        // If lowercase fails, try camelCase
+        // If camelCase fails, try lowercase
         if (weeklyResult.error && (
           weeklyResult.error.code === 'PGRST204' || 
           weeklyResult.error.code === '42703' ||
@@ -138,10 +138,19 @@ export default function Dashboard() {
         )) {
           weeklyResult = await supabase
             .from('user_weekly_hours')
-            .select('availableHours')
-            .eq('userId', user.id)
-            .eq('weekStartDate', weekStartStr)
+            .select('availablehours')
+            .eq('userid', user.id)
+            .eq('weekstartdate', weekStartStr)
             .maybeSingle();
+        }
+        
+        // If table doesn't exist, just use default (don't throw error)
+        if (weeklyResult.error && (
+          weeklyResult.error.code === '42P01' || 
+          weeklyResult.error.code === 'PGRST202' ||
+          weeklyResult.error.message?.includes('does not exist')
+        )) {
+          weeklyResult = { data: null, error: null };
         }
         
         const weeklyHours = weeklyResult.data ? {

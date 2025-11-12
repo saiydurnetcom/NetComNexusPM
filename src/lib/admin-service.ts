@@ -791,21 +791,81 @@ export const adminService = {
   // Project Members
   async getProjectMembers(projectId: string): Promise<Array<User & { role: string; addedBy: string; createdAt: string }>> {
     try {
-      const { data, error } = await supabase
+      // Try camelCase first
+      let { data, error } = await supabase
         .from('project_members')
-        .select(`
-          *,
-          users:userId (
-            id,
-            email,
-            firstName,
-            lastName,
-            role,
-            isActive
-          )
-        `)
+        .select('*, users!project_members_userId_fkey(id, email, firstName, lastName, role, isActive)')
         .eq('projectId', projectId)
         .order('createdAt', { ascending: false });
+      
+      if (error && (
+        error.code === 'PGRST200' || 
+        error.code === '42703' ||
+        error.status === 400 ||
+        error.message?.includes('relationship') ||
+        error.message?.includes('userId')
+      )) {
+        // Try with lowercase
+        const result = await supabase
+          .from('project_members')
+          .select('*, users!project_members_userid_fkey(id, email, firstname, lastname, role, isactive)')
+          .eq('projectid', projectId)
+          .order('createdat', { ascending: false });
+        
+        if (result.error && (
+          result.error.code === 'PGRST200' || 
+          result.error.message?.includes('relationship')
+        )) {
+          // Fallback: Get project members and users separately
+          const membersResult = await supabase
+            .from('project_members')
+            .select('*')
+            .eq('projectid', projectId)
+            .order('createdat', { ascending: false });
+          
+          if (membersResult.error) {
+            if (membersResult.error.code === '42P01' || membersResult.error.code === 'PGRST202' || membersResult.error.message?.includes('does not exist')) {
+              console.warn('Project members table does not exist. Please run the migration.');
+              return [];
+            }
+            throw membersResult.error;
+          }
+          
+          // Get user details separately
+          const userIds = (membersResult.data || []).map((pm: any) => pm.userid || pm.userId || pm.user_id).filter(Boolean);
+          if (userIds.length === 0) return [];
+          
+          const usersResult = await supabase
+            .from('users')
+            .select('id, email, firstname, lastname, role, isactive')
+            .in('id', userIds);
+          
+          const usersMap = new Map((usersResult.data || []).map((u: any) => [
+            u.id,
+            {
+              id: u.id,
+              email: u.email,
+              firstName: u.firstname || u.firstName,
+              lastName: u.lastname || u.lastName,
+              role: u.role,
+              isActive: u.isactive || u.isActive,
+            }
+          ]));
+          
+          return (membersResult.data || []).map((pm: any) => {
+            const user = usersMap.get(pm.userid || pm.userId || pm.user_id);
+            return {
+              ...user,
+              role: pm.role,
+              addedBy: pm.addedby || pm.addedBy || pm.added_by,
+              createdAt: pm.createdat || pm.createdAt || pm.created_at,
+            };
+          }).filter(u => u.id); // Filter out entries without user data
+        } else {
+          data = result.data;
+          error = result.error;
+        }
+      }
       
       if (error) {
         if (error.code === '42P01' || error.code === 'PGRST202' || error.message?.includes('does not exist')) {
@@ -816,12 +876,20 @@ export const adminService = {
       }
       
       // Transform the data to flatten the user object
-      return (data || []).map((pm: any) => ({
-        ...pm.users,
-        role: pm.role,
-        addedBy: pm.addedBy,
-        createdAt: pm.createdAt,
-      }));
+      return (data || []).map((pm: any) => {
+        const user = pm.users || pm.user;
+        return {
+          ...(user || {}),
+          id: user?.id || pm.userid || pm.userId || pm.user_id,
+          email: user?.email || pm.email,
+          firstName: user?.firstName || user?.firstname || pm.firstname || pm.firstName,
+          lastName: user?.lastName || user?.lastname || pm.lastname || pm.lastName,
+          role: pm.role,
+          isActive: user?.isActive || user?.isactive || pm.isactive || pm.isActive,
+          addedBy: pm.addedBy || pm.addedby || pm.added_by,
+          createdAt: pm.createdAt || pm.createdat || pm.created_at,
+        };
+      }).filter((u: any) => u.id); // Filter out entries without user data
     } catch (error) {
       console.error('Error fetching project members:', error);
       return [];

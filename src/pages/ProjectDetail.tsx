@@ -324,7 +324,22 @@ export default function ProjectDetail() {
         estimatedHours: taskForm.estimatedHours,
         assignedTo: taskForm.assignedTo || user.id,
         dueDate: taskForm.dueDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        parentTaskId: taskForm.dependsOnTaskId || undefined,
       });
+
+      // Create dependency if specified
+      if (taskForm.dependsOnTaskId) {
+        try {
+          const { taskDependenciesService } = await import('@/lib/supabase-data');
+          await taskDependenciesService.createDependency({
+            taskId: task.id,
+            dependsOnTaskId: taskForm.dependsOnTaskId,
+          });
+        } catch (error) {
+          console.error('Failed to create dependency:', error);
+          // Don't fail the task creation if dependency fails
+        }
+      }
 
       // Add tags to task
       if (taskForm.selectedTags.length > 0) {
@@ -359,6 +374,7 @@ export default function ProjectDetail() {
         dueDate: '',
         estimatedHours: 1,
         selectedTags: [],
+        dependsOnTaskId: undefined,
       });
       setIsCreateDialogOpen(false);
       await fetchTasks();
@@ -567,15 +583,38 @@ export default function ProjectDetail() {
                 </div>
               </div>
             ) : (
-              <div className="flex items-start justify-between">
+              <div className="flex items-start justify-between w-full">
                 <div>
                   <h1 className="text-3xl font-bold text-gray-900 mb-2">{currentProject.name}</h1>
                   <p className="text-gray-600">{currentProject.description || 'No description'}</p>
                 </div>
-                <Button variant="outline" onClick={() => setIsEditingProject(true)}>
-                  <Edit className="h-4 w-4 mr-2" />
-                  Edit Project
-                </Button>
+                <div className="flex gap-2 items-center">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleGenerateCXOReport}
+                    disabled={isGeneratingReport || !id}
+                    title="Generate CXO Report"
+                  >
+                    {isGeneratingReport ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-4 w-4" />
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate('/reports')}
+                    title="View All Reports"
+                  >
+                    <FileText className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setIsEditingProject(true)}>
+                    <Edit className="h-4 w-4 mr-2" />
+                    Edit
+                  </Button>
+                </div>
               </div>
             )}
           </div>
@@ -807,42 +846,6 @@ export default function ProjectDetail() {
           </CardContent>
         </Card>
 
-        {/* Quick Actions / AI Reports */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
-            <CardDescription>Generate AI-powered project reports</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <Button
-              variant="default"
-              className="w-full justify-start bg-blue-600 hover:bg-blue-700"
-              onClick={handleGenerateCXOReport}
-              disabled={isGeneratingReport || !id}
-            >
-              {isGeneratingReport ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  Generate CXO Report
-                </>
-              )}
-            </Button>
-            <Button
-              variant="outline"
-              className="w-full justify-start"
-              onClick={() => navigate('/reports')}
-            >
-              <FileText className="h-4 w-4 mr-2" />
-              View All Reports
-            </Button>
-          </CardContent>
-        </Card>
-
         {/* Add Member Dialog */}
         <Dialog open={isMemberDialogOpen} onOpenChange={setIsMemberDialogOpen}>
           <DialogContent>
@@ -1042,6 +1045,27 @@ export default function ProjectDetail() {
                         />
                       </div>
                     </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="task-dependency">Depends On (Optional)</Label>
+                      <Select
+                        value={taskForm.dependsOnTaskId || ''}
+                        onValueChange={(value) => setTaskForm({ ...taskForm, dependsOnTaskId: value || undefined })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a task this depends on" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">None</SelectItem>
+                          {projectTasks
+                            .filter(t => t.id !== taskForm.dependsOnTaskId)
+                            .map((t) => (
+                              <SelectItem key={t.id} value={t.id}>
+                                {t.title}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                     <TagSelector
                       tags={availableTags}
                       selectedTags={taskForm.selectedTags}
@@ -1219,7 +1243,7 @@ export default function ProjectDetail() {
                                 {Math.round(progressPercentage)}%
                               </span>
                             </div>
-                            <div className="w-full bg-gray-200 rounded-full h-2 relative">
+                            <div className="w-full bg-gray-200 rounded-full h-2 relative overflow-hidden">
                               <div
                                 className={`h-2 rounded-full transition-all ${
                                   hasExceeded120Percent ? 'bg-red-600' :
@@ -1229,12 +1253,6 @@ export default function ProjectDetail() {
                                 }`}
                                 style={{ width: `${Math.min(100, progressPercentage)}%` }}
                               />
-                              {hasExceededEstimate && (
-                                <div
-                                  className="absolute top-0 left-0 h-2 bg-red-600 rounded-full"
-                                  style={{ width: `${Math.min(100, (progressPercentage - 100) / 2)}%`, left: '100%' }}
-                                />
-                              )}
                             </div>
                             <div className="flex items-center justify-between text-xs text-muted-foreground">
                               <span>{formatDuration(totalTime)}</span>

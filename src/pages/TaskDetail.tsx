@@ -1177,38 +1177,6 @@ export default function TaskDetail() {
               </CardContent>
             </Card>
 
-            {/* Sub-tasks */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Sub-tasks</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {tasks.filter(t => t.parentTaskId === task.id).length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No sub-tasks</p>
-                ) : (
-                  <div className="space-y-2">
-                    {tasks.filter(t => t.parentTaskId === task.id).map((subTask) => (
-                      <div
-                        key={subTask.id}
-                        className="p-2 border rounded-lg cursor-pointer hover:bg-gray-50"
-                        onClick={() => navigate(`/tasks/${subTask.id}`)}
-                      >
-                        <p className="text-sm font-medium">{subTask.title}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <Badge variant="outline" className="text-xs">
-                            {subTask.status}
-                          </Badge>
-                          <Badge variant="outline" className="text-xs">
-                            {subTask.priority}
-                          </Badge>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
             {/* Comments */}
             <Card>
               <CardHeader>
