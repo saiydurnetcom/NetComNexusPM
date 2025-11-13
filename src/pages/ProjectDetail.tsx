@@ -96,6 +96,8 @@ export default function ProjectDetail() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
+  const [viewMode, setViewMode] = useState<'grid' | 'table' | 'kanban'>('grid');
+  const [isMembersSheetOpen, setIsMembersSheetOpen] = useState(false);
 
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [projectTasks, setProjectTasks] = useState<Task[]>([]);
