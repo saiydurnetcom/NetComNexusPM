@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import AppLayout from '@/components/AppLayout';
 import { useTasks } from '@/hooks/useTasks';
 import { useProjects } from '@/hooks/useProjects';
@@ -50,7 +51,9 @@ import {
   AlertTriangle,
   DollarSign,
   Flag,
-  BarChart3
+  BarChart3,
+  Grid,
+  List
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -715,8 +718,9 @@ export default function ProjectDetail() {
         </CardHeader>
           <CardContent>
             <Tabs defaultValue="overview" className="w-full">
-              <TabsList className="grid grid-cols-7 w-full">
+              <TabsList className="grid grid-cols-8 w-full">
                 <TabsTrigger value="overview">Overview</TabsTrigger>
+                <TabsTrigger value="tasks">Tasks</TabsTrigger>
                 <TabsTrigger value="details">Details</TabsTrigger>
                 <TabsTrigger value="kanban">
                   <FolderKanban className="h-4 w-4 mr-1" />
@@ -790,6 +794,524 @@ export default function ProjectDetail() {
                     <p className="text-sm">{(currentProject as any).purpose}</p>
                   </div>
                 )}
+              </TabsContent>
+
+              <TabsContent value="tasks" className="space-y-4 mt-4">
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle>Tasks ({filteredTasks.length})</CardTitle>
+                        <CardDescription>Manage tasks for this project</CardDescription>
+                      </div>
+                      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+                        <DialogTrigger asChild>
+                          <Button>
+                            <Plus className="h-4 w-4 mr-2" />
+                            New Task
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-2xl">
+                          <DialogHeader>
+                            <DialogTitle>Create New Task</DialogTitle>
+                            <DialogDescription>Add a new task to this project</DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-4 py-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="task-title">Title *</Label>
+                              <Input
+                                id="task-title"
+                                value={taskForm.title}
+                                onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })}
+                                placeholder="Enter task title"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="task-description">Description</Label>
+                              <Textarea
+                                id="task-description"
+                                value={taskForm.description}
+                                onChange={(e) => setTaskForm({ ...taskForm, description: e.target.value })}
+                                placeholder="Enter task description"
+                                rows={4}
+                              />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <Label htmlFor="task-priority">Priority</Label>
+                                <Select
+                                  value={taskForm.priority}
+                                  onValueChange={(value: Task['priority']) => setTaskForm({ ...taskForm, priority: value })}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="low">Low</SelectItem>
+                                    <SelectItem value="medium">Medium</SelectItem>
+                                    <SelectItem value="high">High</SelectItem>
+                                    <SelectItem value="urgent">Urgent</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="task-assignee">Assignee</Label>
+                                <Select
+                                  value={taskForm.assignedTo}
+                                  onValueChange={(value) => setTaskForm({ ...taskForm, assignedTo: value })}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select assignee" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {availableUsers.map((u) => (
+                                      <SelectItem key={u.id} value={u.id}>
+                                        {u.firstName} {u.lastName}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <Label htmlFor="task-due-date">Due Date</Label>
+                                <Input
+                                  id="task-due-date"
+                                  type="date"
+                                  value={taskForm.dueDate}
+                                  onChange={(e) => setTaskForm({ ...taskForm, dueDate: e.target.value })}
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="task-estimated-hours">Estimated Hours</Label>
+                                <Input
+                                  id="task-estimated-hours"
+                                  type="number"
+                                  min="0"
+                                  step="0.5"
+                                  value={taskForm.estimatedHours}
+                                  onChange={(e) => setTaskForm({ ...taskForm, estimatedHours: parseFloat(e.target.value) || 0 })}
+                                />
+                              </div>
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="task-dependency">Depends On (Optional)</Label>
+                              <Select
+                                value={taskForm.dependsOnTaskId || ''}
+                                onValueChange={(value) => setTaskForm({ ...taskForm, dependsOnTaskId: value || undefined })}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select a task this depends on" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="">None</SelectItem>
+                                  {projectTasks
+                                    .filter(t => t.id !== taskForm.dependsOnTaskId)
+                                    .map((t) => (
+                                      <SelectItem key={t.id} value={t.id}>
+                                        {t.title}
+                                      </SelectItem>
+                                    ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <TagSelector
+                              tags={availableTags}
+                              selectedTags={taskForm.selectedTags}
+                              onSelectionChange={(tagIds) => setTaskForm({ ...taskForm, selectedTags: tagIds })}
+                            />
+                          </div>
+                          <div className="flex justify-end gap-2">
+                            <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                              Cancel
+                            </Button>
+                            <Button onClick={handleCreateTask} disabled={!taskForm.title.trim()}>
+                              Create Task
+                            </Button>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {/* Search, Filters, and View Toggle */}
+                    <div className="flex flex-col sm:flex-row gap-4">
+                      <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <Input
+                          placeholder="Search tasks..."
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className="pl-10"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <Select value={statusFilter} onValueChange={setStatusFilter}>
+                          <SelectTrigger className="w-32">
+                            <SelectValue placeholder="Status" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Status</SelectItem>
+                            <SelectItem value="todo">To Do</SelectItem>
+                            <SelectItem value="in_progress">In Progress</SelectItem>
+                            <SelectItem value="review">Review</SelectItem>
+                            <SelectItem value="blocked">Blocked</SelectItem>
+                            <SelectItem value="completed">Completed</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                          <SelectTrigger className="w-32">
+                            <SelectValue placeholder="Priority" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Priority</SelectItem>
+                            <SelectItem value="low">Low</SelectItem>
+                            <SelectItem value="medium">Medium</SelectItem>
+                            <SelectItem value="high">High</SelectItem>
+                            <SelectItem value="urgent">Urgent</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <div className="flex items-center gap-1 border rounded-md p-1">
+                          <Button
+                            variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                            size="sm"
+                            onClick={() => setViewMode('grid')}
+                            className="h-8"
+                          >
+                            <Grid className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant={viewMode === 'table' ? 'default' : 'ghost'}
+                            size="sm"
+                            onClick={() => setViewMode('table')}
+                            className="h-8"
+                          >
+                            <List className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant={viewMode === 'kanban' ? 'default' : 'ghost'}
+                            size="sm"
+                            onClick={() => setViewMode('kanban')}
+                            className="h-8"
+                          >
+                            <FolderKanban className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Tasks Views */}
+                    {tasksLoading ? (
+                      <div className="text-center py-12">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                      </div>
+                    ) : filteredTasks.length === 0 ? (
+                      <div className="text-center py-12">
+                        <CheckCircle2 className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+                        <h3 className="text-lg font-semibold mb-2">
+                          {searchTerm || statusFilter !== 'all' || priorityFilter !== 'all'
+                            ? 'No tasks found'
+                            : 'No tasks yet'}
+                        </h3>
+                        <p className="text-muted-foreground mb-4">
+                          {searchTerm || statusFilter !== 'all' || priorityFilter !== 'all'
+                            ? 'Try adjusting your filters'
+                            : 'Create your first task for this project'}
+                        </p>
+                        {!searchTerm && statusFilter === 'all' && priorityFilter === 'all' && (
+                          <Button onClick={() => setIsCreateDialogOpen(true)}>
+                            <Plus className="h-4 w-4 mr-2" />
+                            Create Task
+                          </Button>
+                        )}
+                      </div>
+                    ) : viewMode === 'kanban' ? (
+                      <div className="w-full">
+                        <KanbanBoard
+                          tasks={filteredTasks}
+                          onTaskStatusChange={async (taskId, newStatus) => {
+                            try {
+                              await updateTaskStatus(taskId, newStatus);
+                              await fetchTasks();
+                              toast({
+                                title: 'Success',
+                                description: 'Task status updated',
+                              });
+                            } catch (error) {
+                              toast({
+                                title: 'Error',
+                                description: 'Failed to update task status',
+                                variant: 'destructive',
+                              });
+                              throw error;
+                            }
+                          }}
+                          showProject={false}
+                          users={availableUsers}
+                        />
+                      </div>
+                    ) : viewMode === 'table' ? (
+                      <Card>
+                        <CardContent className="p-0">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Title</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead>Priority</TableHead>
+                                <TableHead>Assignee</TableHead>
+                                <TableHead>Due Date</TableHead>
+                                <TableHead>Time</TableHead>
+                                <TableHead>Progress</TableHead>
+                                <TableHead className="text-right">Actions</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {filteredTasks.map((task) => {
+                                const dueDate = new Date(task.dueDate);
+                                const isTaskOverdue = isOverdue(task.dueDate);
+                                const assignedUser = availableUsers.find(u => u.id === task.assignedTo) || user;
+                                const taskTimeEntries = timeEntries.filter(entry => entry.taskId === task.id);
+                                const totalTime = taskTimeEntries.reduce((total, entry) => total + (entry.durationMinutes || 0), 0);
+                                const progressPercentage = task.estimatedHours > 0 
+                                  ? (totalTime / (task.estimatedHours * 60)) * 100
+                                  : 0;
+                                const isTaskTimerActive = activeTimer?.taskId === task.id;
+                                
+                                return (
+                                  <TableRow 
+                                    key={task.id} 
+                                    className="cursor-pointer hover:bg-gray-50"
+                                    onClick={() => navigate(`/tasks/${task.id}`)}
+                                  >
+                                    <TableCell className="font-medium max-w-xs">
+                                      <div className="truncate">{task.title}</div>
+                                    </TableCell>
+                                    <TableCell>
+                                      <Select
+                                        value={task.status}
+                                        onValueChange={(value: Task['status']) => {
+                                          handleStatusChange(task.id, value);
+                                        }}
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <SelectTrigger className="w-28 h-8 text-xs">
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="todo">To Do</SelectItem>
+                                          <SelectItem value="in_progress">In Progress</SelectItem>
+                                          <SelectItem value="review">Review</SelectItem>
+                                          <SelectItem value="completed">Completed</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </TableCell>
+                                    <TableCell>
+                                      <Badge variant={getPriorityColor(task.priority)} className="text-xs">
+                                        {task.priority}
+                                      </Badge>
+                                    </TableCell>
+                                    <TableCell>
+                                      <span className="text-xs">
+                                        {assignedUser ? `${assignedUser.firstName} ${assignedUser.lastName}` : 'Unassigned'}
+                                      </span>
+                                    </TableCell>
+                                    <TableCell>
+                                      <span className={`text-xs ${isTaskOverdue ? 'text-red-600 font-semibold' : ''}`}>
+                                        {format(dueDate, 'MMM dd, yyyy')}
+                                      </span>
+                                    </TableCell>
+                                    <TableCell>
+                                      <span className="text-xs text-muted-foreground">
+                                        {formatDuration(totalTime)} / {task.estimatedHours}h
+                                      </span>
+                                    </TableCell>
+                                    <TableCell>
+                                      <div className="flex items-center gap-2">
+                                        <div className="w-16 bg-gray-200 rounded-full h-2">
+                                          <div
+                                            className="bg-blue-600 h-2 rounded-full"
+                                            style={{ width: `${Math.min(100, progressPercentage)}%` }}
+                                          />
+                                        </div>
+                                        <span className="text-xs text-muted-foreground">
+                                          {Math.round(progressPercentage)}%
+                                        </span>
+                                      </div>
+                                    </TableCell>
+                                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                                      <Button
+                                        variant={isTaskTimerActive ? 'destructive' : 'outline'}
+                                        size="sm"
+                                        onClick={() => {
+                                          if (isTaskTimerActive) {
+                                            handleStopTimer();
+                                          } else {
+                                            handleStartTimer(task.id);
+                                          }
+                                        }}
+                                      >
+                                        {isTaskTimerActive ? (
+                                          <>
+                                            <Square className="h-3 w-3 mr-1" />
+                                            Stop
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Play className="h-3 w-3 mr-1" />
+                                            Start
+                                          </>
+                                        )}
+                                      </Button>
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                        {filteredTasks.map((task) => {
+                          const dueDate = new Date(task.dueDate);
+                          const isTaskOverdue = isOverdue(task.dueDate);
+                          const assignedUser = availableUsers.find(u => u.id === task.assignedTo) || user;
+                          const taskTimeEntries = timeEntries.filter(entry => entry.taskId === task.id);
+                          const totalTime = taskTimeEntries.reduce((total, entry) => total + (entry.durationMinutes || 0), 0);
+                          const progressPercentage = task.estimatedHours > 0 
+                            ? (totalTime / (task.estimatedHours * 60)) * 100
+                            : 0;
+                          const hasExceededEstimate = progressPercentage > 100;
+                          const hasExceeded120Percent = progressPercentage > 120;
+                          const isTaskTimerActive = activeTimer?.taskId === task.id;
+                          
+                          return (
+                            <Card
+                              key={task.id}
+                              className={`hover:shadow-lg transition-all cursor-pointer ${
+                                isTaskOverdue && task.status !== 'completed' ? 'border-red-300 bg-red-50/50' : ''
+                              }`}
+                              onClick={() => navigate(`/tasks/${task.id}`)}
+                            >
+                              <CardHeader className="pb-3">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex-1 min-w-0">
+                                    <CardTitle className="text-lg line-clamp-2 mb-2">{task.title}</CardTitle>
+                                    {task.description && (
+                                      <CardDescription className="line-clamp-2 text-sm">
+                                        {task.description}
+                                      </CardDescription>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-1 flex-shrink-0">
+                                    {getStatusIcon(task.status)}
+                                    <Select
+                                      value={task.status}
+                                      onValueChange={(value: Task['status']) => {
+                                        handleStatusChange(task.id, value);
+                                      }}
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <SelectTrigger className="w-28 h-8 text-xs">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="todo">To Do</SelectItem>
+                                        <SelectItem value="in_progress">In Progress</SelectItem>
+                                        <SelectItem value="review">Review</SelectItem>
+                                        <SelectItem value="completed">Completed</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                </div>
+                              </CardHeader>
+                              <CardContent className="space-y-3">
+                                <div className="flex items-center justify-between text-sm">
+                                  <div className="flex items-center gap-1">
+                                    <UserIcon className="h-3 w-3 text-muted-foreground" />
+                                    <span className="text-xs text-muted-foreground">
+                                      {assignedUser ? `${assignedUser.firstName} ${assignedUser.lastName}` : 'Unassigned'}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <Badge variant={getPriorityColor(task.priority)} className="text-xs">
+                                    {task.priority}
+                                  </Badge>
+                                  <div className="flex items-center gap-1">
+                                    <Calendar className={`h-3 w-3 ${isTaskOverdue ? 'text-red-600' : 'text-muted-foreground'}`} />
+                                    <span className={`text-xs ${isTaskOverdue ? 'text-red-600 font-semibold' : 'text-muted-foreground'}`}>
+                                      {format(dueDate, 'MMM dd, yyyy')}
+                                    </span>
+                                    {isTaskOverdue && task.status !== 'completed' && (
+                                      <Badge variant="destructive" className="text-xs ml-1">Overdue</Badge>
+                                    )}
+                                  </div>
+                                </div>
+                                {task.estimatedHours > 0 && (
+                                  <div className="space-y-1">
+                                    <div className="flex items-center justify-between text-xs">
+                                      <span className="text-muted-foreground">Progress</span>
+                                      <span className={`font-medium ${
+                                        hasExceeded120Percent ? 'text-red-600' :
+                                        hasExceededEstimate ? 'text-orange-600' :
+                                        ''
+                                      }`}>
+                                        {Math.round(progressPercentage)}%
+                                      </span>
+                                    </div>
+                                    <div className="w-full bg-gray-200 rounded-full h-2 relative overflow-hidden">
+                                      <div
+                                        className={`h-2 rounded-full transition-all ${
+                                          hasExceeded120Percent ? 'bg-red-600' :
+                                          hasExceededEstimate ? 'bg-orange-500' :
+                                          progressPercentage >= 80 ? 'bg-yellow-500' :
+                                          'bg-blue-600'
+                                        }`}
+                                        style={{ width: `${Math.min(100, progressPercentage)}%` }}
+                                      />
+                                    </div>
+                                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                      <span>{formatDuration(totalTime)}</span>
+                                      <span>{task.estimatedHours}h estimated</span>
+                                    </div>
+                                  </div>
+                                )}
+                                <Button
+                                  variant={isTaskTimerActive ? 'destructive' : 'outline'}
+                                  size="sm"
+                                  className="w-full"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (isTaskTimerActive) {
+                                      handleStopTimer();
+                                    } else {
+                                      handleStartTimer(task.id);
+                                    }
+                                  }}
+                                >
+                                  {isTaskTimerActive ? (
+                                    <>
+                                      <Square className="h-3 w-3 mr-1" />
+                                      Stop Timer
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Play className="h-3 w-3 mr-1" />
+                                      Start Timer
+                                    </>
+                                  )}
+                                </Button>
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               </TabsContent>
 
               <TabsContent value="kanban" className="space-y-4 mt-4">
@@ -1413,87 +1935,101 @@ export default function ProjectDetail() {
         </CardContent>
       </Card>
 
-        {/* Project Members */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Project Members</CardTitle>
-                <CardDescription>Manage who can view and collaborate on this project</CardDescription>
-              </div>
+        {/* Project Members - Sheet/Drawer */}
+        <Sheet open={isMembersSheetOpen} onOpenChange={setIsMembersSheetOpen}>
+          <SheetTrigger asChild>
+            <Button variant="outline" className="w-full">
+              <Users className="h-4 w-4 mr-2" />
+              Project Members ({projectMembers.length})
+            </Button>
+          </SheetTrigger>
+          <SheetContent className="w-full sm:max-w-lg">
+            <SheetHeader>
+              <SheetTitle>Project Members</SheetTitle>
+              <SheetDescription>
+                Manage who can view and collaborate on this project
+              </SheetDescription>
+            </SheetHeader>
+            <div className="mt-6 space-y-4">
               {(user?.role === 'admin' || currentProject?.createdBy === user?.id) && (
-                <Button onClick={() => setIsMemberDialogOpen(true)}>
+                <Button 
+                  onClick={() => {
+                    setIsMembersSheetOpen(false);
+                    setIsMemberDialogOpen(true);
+                  }}
+                  className="w-full"
+                >
                   <Plus className="h-4 w-4 mr-2" />
                   Add Member
                 </Button>
               )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            {projectMembers.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Users className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                <p className="text-sm">No members added yet</p>
-                {(user?.role === 'admin' || currentProject?.createdBy === user?.id) && (
-                  <Button variant="outline" size="sm" className="mt-3" onClick={() => setIsMemberDialogOpen(true)}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add First Member
-                  </Button>
-                )}
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+              {projectMembers.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Users className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                  <p className="text-sm">No members added yet</p>
+                  {(user?.role === 'admin' || currentProject?.createdBy === user?.id) && (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="mt-3" 
+                      onClick={() => {
+                        setIsMembersSheetOpen(false);
+                        setIsMemberDialogOpen(true);
+                      }}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add First Member
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2">
                   {projectMembers.map((member) => (
-                    <TableRow key={member.id}>
-                      <TableCell>{member.firstName} {member.lastName}</TableCell>
-                      <TableCell>{member.email}</TableCell>
-                      <TableCell>
-                        {(user?.role === 'admin' || currentProject?.createdBy === user?.id) ? (
-                          <Select
-                            value={member.role}
-                            onValueChange={(value: 'owner' | 'member' | 'viewer') => handleUpdateMemberRole(member.id, value)}
-                          >
-                            <SelectTrigger className="w-32">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="owner">Owner</SelectItem>
-                              <SelectItem value="member">Member</SelectItem>
-                              <SelectItem value="viewer">Viewer</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <Badge variant="outline">{member.role}</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {(user?.role === 'admin' || currentProject?.createdBy === user?.id) && member.id !== user?.id && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleRemoveMember(member.id)}
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
+                    <Card key={member.id}>
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <p className="font-medium">{member.firstName} {member.lastName}</p>
+                            <p className="text-sm text-muted-foreground">{member.email}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {(user?.role === 'admin' || currentProject?.createdBy === user?.id) ? (
+                              <Select
+                                value={member.role}
+                                onValueChange={(value: 'owner' | 'member' | 'viewer') => handleUpdateMemberRole(member.id, value)}
+                              >
+                                <SelectTrigger className="w-32">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="owner">Owner</SelectItem>
+                                  <SelectItem value="member">Member</SelectItem>
+                                  <SelectItem value="viewer">Viewer</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <Badge variant="outline">{member.role}</Badge>
+                            )}
+                            {(user?.role === 'admin' || currentProject?.createdBy === user?.id) && member.id !== user?.id && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleRemoveMember(member.id)}
+                                className="text-red-600 hover:text-red-700"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
                   ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
+                </div>
+              )}
+            </div>
+          </SheetContent>
+        </Sheet>
 
         {/* Add Member Dialog */}
         <Dialog open={isMemberDialogOpen} onOpenChange={setIsMemberDialogOpen}>
@@ -1594,365 +2130,6 @@ export default function ProjectDetail() {
             </CardContent>
           </Card>
         </div>
-
-        {/* Tasks Section - Same UI as Tasks page */}
-      <Card>
-        <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Tasks ({filteredTasks.length})</CardTitle>
-                <CardDescription>Manage tasks for this project</CardDescription>
-              </div>
-              <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button>
-                    <Plus className="h-4 w-4 mr-2" />
-                    New Task
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-2xl">
-                  <DialogHeader>
-                    <DialogTitle>Create New Task</DialogTitle>
-                    <DialogDescription>Add a new task to this project</DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="task-title">Title *</Label>
-                      <Input
-                        id="task-title"
-                        value={taskForm.title}
-                        onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })}
-                        placeholder="Enter task title"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="task-description">Description</Label>
-                      <Textarea
-                        id="task-description"
-                        value={taskForm.description}
-                        onChange={(e) => setTaskForm({ ...taskForm, description: e.target.value })}
-                        placeholder="Enter task description"
-                        rows={4}
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="task-priority">Priority</Label>
-                        <Select
-                          value={taskForm.priority}
-                          onValueChange={(value: Task['priority']) => setTaskForm({ ...taskForm, priority: value })}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="low">Low</SelectItem>
-                            <SelectItem value="medium">Medium</SelectItem>
-                            <SelectItem value="high">High</SelectItem>
-                            <SelectItem value="urgent">Urgent</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="task-assignee">Assignee</Label>
-                        <Select
-                          value={taskForm.assignedTo}
-                          onValueChange={(value) => setTaskForm({ ...taskForm, assignedTo: value })}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select assignee" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {availableUsers.map((u) => (
-                              <SelectItem key={u.id} value={u.id}>
-                                {u.firstName} {u.lastName}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="task-due-date">Due Date</Label>
-                        <Input
-                          id="task-due-date"
-                          type="date"
-                          value={taskForm.dueDate}
-                          onChange={(e) => setTaskForm({ ...taskForm, dueDate: e.target.value })}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="task-estimated-hours">Estimated Hours</Label>
-                        <Input
-                          id="task-estimated-hours"
-                          type="number"
-                          min="0"
-                          step="0.5"
-                          value={taskForm.estimatedHours}
-                          onChange={(e) => setTaskForm({ ...taskForm, estimatedHours: parseFloat(e.target.value) || 0 })}
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="task-dependency">Depends On (Optional)</Label>
-                      <Select
-                        value={taskForm.dependsOnTaskId || ''}
-                        onValueChange={(value) => setTaskForm({ ...taskForm, dependsOnTaskId: value || undefined })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a task this depends on" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="">None</SelectItem>
-                          {projectTasks
-                            .filter(t => t.id !== taskForm.dependsOnTaskId)
-                            .map((t) => (
-                              <SelectItem key={t.id} value={t.id}>
-                                {t.title}
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <TagSelector
-                      tags={availableTags}
-                      selectedTags={taskForm.selectedTags}
-                      onSelectionChange={(tagIds) => setTaskForm({ ...taskForm, selectedTags: tagIds })}
-                    />
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                      Cancel
-                    </Button>
-                    <Button onClick={handleCreateTask} disabled={!taskForm.title.trim()}>
-                      Create Task
-                    </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
-            </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-            {/* Search and Filters */}
-            <div className="flex gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Search tasks..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-32">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="todo">To Do</SelectItem>
-                  <SelectItem value="in_progress">In Progress</SelectItem>
-                  <SelectItem value="review">Review</SelectItem>
-                  <SelectItem value="blocked">Blocked</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-                <SelectTrigger className="w-32">
-                  <SelectValue placeholder="Priority" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Priority</SelectItem>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="urgent">Urgent</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Tasks Grid - Same as Tasks page */}
-          {tasksLoading ? (
-              <div className="text-center py-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-              </div>
-            ) : filteredTasks.length === 0 ? (
-              <div className="text-center py-12">
-                <CheckCircle2 className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-                <h3 className="text-lg font-semibold mb-2">
-                  {searchTerm || statusFilter !== 'all' || priorityFilter !== 'all'
-                    ? 'No tasks found'
-                    : 'No tasks yet'}
-                </h3>
-                <p className="text-muted-foreground mb-4">
-                  {searchTerm || statusFilter !== 'all' || priorityFilter !== 'all'
-                    ? 'Try adjusting your filters'
-                    : 'Create your first task for this project'}
-                </p>
-                {!searchTerm && statusFilter === 'all' && priorityFilter === 'all' && (
-                  <Button onClick={() => setIsCreateDialogOpen(true)}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create Task
-                  </Button>
-                )}
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-                {filteredTasks.map((task) => {
-                  const dueDate = new Date(task.dueDate);
-                  const isTaskOverdue = isOverdue(task.dueDate);
-                  const assignedUser = availableUsers.find(u => u.id === task.assignedTo) || user;
-                  const taskTimeEntries = timeEntries.filter(entry => entry.taskId === task.id);
-                  const totalTime = taskTimeEntries.reduce((total, entry) => total + (entry.durationMinutes || 0), 0);
-                  const progressPercentage = task.estimatedHours > 0 
-                    ? (totalTime / (task.estimatedHours * 60)) * 100
-                    : 0;
-                  const hasExceededEstimate = progressPercentage > 100;
-                  const hasExceeded120Percent = progressPercentage > 120;
-                  const isTaskTimerActive = activeTimer?.taskId === task.id;
-                  
-                  return (
-                    <Card
-                      key={task.id}
-                      className={`hover:shadow-lg transition-all cursor-pointer ${
-                        isTaskOverdue && task.status !== 'completed' ? 'border-red-300 bg-red-50/50' : ''
-                      }`}
-                        onClick={() => navigate(`/tasks/${task.id}`)}
-                      >
-                      <CardHeader className="pb-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <CardTitle className="text-lg line-clamp-2 mb-2">{task.title}</CardTitle>
-                      {task.description && (
-                              <CardDescription className="line-clamp-2 text-sm">
-                          {task.description}
-                              </CardDescription>
-                      )}
-                          </div>
-                          <div className="flex items-center gap-1 flex-shrink-0">
-                            {getStatusIcon(task.status)}
-                            <Select
-                              value={task.status}
-                              onValueChange={(value: Task['status']) => {
-                                handleStatusChange(task.id, value);
-                              }}
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <SelectTrigger className="w-28 h-8 text-xs">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="todo">To Do</SelectItem>
-                                <SelectItem value="in_progress">In Progress</SelectItem>
-                                <SelectItem value="review">Review</SelectItem>
-                                <SelectItem value="completed">Completed</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="space-y-3">
-                        {/* Assignee */}
-                        <div className="flex items-center justify-between text-sm">
-                          <div className="flex items-center gap-1">
-                            <UserIcon className="h-3 w-3 text-muted-foreground" />
-                            <span className="text-xs text-muted-foreground">
-                              {assignedUser ? `${assignedUser.firstName} ${assignedUser.lastName}` : 'Unassigned'}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Priority & Due Date */}
-                        <div className="flex items-center justify-between">
-                          <Badge variant={getPriorityColor(task.priority)} className="text-xs">
-                            {task.priority}
-                      </Badge>
-                          <div className="flex items-center gap-1">
-                            <Calendar className={`h-3 w-3 ${isTaskOverdue ? 'text-red-600' : 'text-muted-foreground'}`} />
-                            <span className={`text-xs ${isTaskOverdue ? 'text-red-600 font-semibold' : 'text-muted-foreground'}`}>
-                              {format(dueDate, 'MMM dd, yyyy')}
-                            </span>
-                            {isTaskOverdue && task.status !== 'completed' && (
-                              <Badge variant="destructive" className="text-xs ml-1">Overdue</Badge>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Progress Bar */}
-                        {task.estimatedHours > 0 && (
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="text-muted-foreground">Progress</span>
-                              <span className={`font-medium ${
-                                hasExceeded120Percent ? 'text-red-600' :
-                                hasExceededEstimate ? 'text-orange-600' :
-                                ''
-                              }`}>
-                                {Math.round(progressPercentage)}%
-                              </span>
-                            </div>
-                            <div className="w-full bg-gray-200 rounded-full h-2 relative overflow-hidden">
-                              <div
-                                className={`h-2 rounded-full transition-all ${
-                                  hasExceeded120Percent ? 'bg-red-600' :
-                                  hasExceededEstimate ? 'bg-orange-500' :
-                                  progressPercentage >= 80 ? 'bg-yellow-500' :
-                                  'bg-blue-600'
-                                }`}
-                                style={{ width: `${Math.min(100, progressPercentage)}%` }}
-                              />
-                            </div>
-                            <div className="flex items-center justify-between text-xs text-muted-foreground">
-                              <span>{formatDuration(totalTime)}</span>
-                              <span>{task.estimatedHours}h estimated</span>
-                            </div>
-                            {hasExceededEstimate && (
-                              <p className={`text-xs ${
-                                hasExceeded120Percent ? 'text-red-600 font-semibold' : 'text-orange-600'
-                              }`}>
-                                {hasExceeded120Percent 
-                                  ? '⚠️ This task exceeded the estimate by over 120%. Planning should be refined.'
-                                  : '⚠️ This task exceeded the estimate.'}
-                              </p>
-                            )}
-                    </div>
-                        )}
-
-                        {/* Timer Button */}
-                      <Button
-                          variant={isTaskTimerActive ? 'destructive' : 'outline'}
-                        size="sm"
-                          className="w-full"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (isTaskTimerActive) {
-                              handleStopTimer();
-                            } else {
-                              handleStartTimer(task.id);
-                            }
-                          }}
-                      >
-                          {isTaskTimerActive ? (
-                          <>
-                              <Square className="h-3 w-3 mr-1" />
-                              Stop Timer
-                          </>
-                        ) : (
-                            <>
-                              <Play className="h-3 w-3 mr-1" />
-                              Start Timer
-                            </>
-                        )}
-                      </Button>
-                </CardContent>
-              </Card>
-                  );
-                })}
-              </div>
-          )}
-        </CardContent>
-      </Card>
 
       {/* CXO Report Dialog */}
       <Dialog open={isReportDialogOpen} onOpenChange={setIsReportDialogOpen}>
