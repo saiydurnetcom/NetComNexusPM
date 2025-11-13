@@ -10,7 +10,7 @@ import { Separator } from '@/components/ui/separator';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/components/ui/use-toast';
-import { supabase } from '@/lib/supabase';
+import { apiClient } from '@/lib/api-client';
 import { notificationPreferencesService } from '@/lib/notification-preferences-service';
 import { pushNotificationService } from '@/lib/push-notification-service';
 import { RefreshCw } from 'lucide-react';
@@ -415,25 +415,18 @@ export default function Settings() {
                     size="sm"
                     onClick={async () => {
                       try {
-                        // Try to get role directly from database using RPC
-                        const { data: roleData, error: rpcError } = await supabase.rpc('get_current_user_role');
-                        if (!rpcError && roleData) {
-                          // Update user role directly
-                          const { data: { session } } = await supabase.auth.getSession();
-                          if (session?.user) {
-                            const updatedUser = {
-                              ...user!,
-                              role: roleData as 'admin' | 'manager' | 'member',
-                            };
-                            // Force update the user state
-                            await refreshUser();
-                            toast({
-                              title: 'Success',
-                              description: `Role refreshed: ${roleData}. ${roleData === 'admin' ? 'You should now see the Admin link in navigation.' : ''}`,
-                            });
-                            // Force page reload to update navigation
-                            setTimeout(() => window.location.reload(), 1000);
-                          }
+                        // Try to get role directly from database using API
+                        const roleResponse = await apiClient.getCurrentUserRole();
+                        const roleData = roleResponse.role;
+                        if (roleData) {
+                          // Force update the user state
+                          await refreshUser();
+                          toast({
+                            title: 'Success',
+                            description: `Role refreshed: ${roleData}. ${roleData === 'admin' ? 'You should now see the Admin link in navigation.' : ''}`,
+                          });
+                          // Force page reload to update navigation
+                          setTimeout(() => window.location.reload(), 1000);
                         } else {
                           // Fallback to refreshUser
                           await refreshUser();

@@ -43,13 +43,9 @@ export default function Projects() {
 
   const loadTags = async () => {
     try {
-      const { supabase } = await import('@/lib/supabase');
-      const { data, error } = await supabase
-        .from('tags')
-        .select('*')
-        .order('name');
-      if (error) throw error;
-      setAvailableTags(data || []);
+      // Tags endpoint will be added to backend - for now use empty array
+      // TODO: Add GET /api/tags endpoint
+      setAvailableTags([]);
     } catch (error) {
       console.error('Error loading tags:', error);
     }
@@ -57,42 +53,22 @@ export default function Projects() {
 
   const loadProjectTags = async () => {
     try {
-      const { supabase } = await import('@/lib/supabase');
-      // Try camelCase first, fallback to snake_case
-      let { data, error } = await supabase
-        .from('project_tags')
-        .select('projectId, tagId, tags(*)');
+      // Load tags for all projects
+      const tagMap: Record<string, Tag[]> = {};
       
-      if (error) {
-        // If camelCase fails, try snake_case
-        if (error.code === '42703' || error.message?.includes('projectId') || error.message?.includes('projectid')) {
-          const result = await supabase
-            .from('project_tags')
-            .select('projectid, tagid, tags(*)');
-          
-          if (result.error) {
-            console.error('Error loading project tags:', result.error);
-            setProjectTags({});
-            return;
+      await Promise.all(
+        projects.map(async (project) => {
+          try {
+            const projectTags = await apiClient.getProjectTags(project.id);
+            tagMap[project.id] = projectTags.map((pt: any) => pt.tag);
+          } catch (error) {
+            console.error(`Error loading tags for project ${project.id}:`, error);
+            tagMap[project.id] = [];
           }
-          
-          data = result.data;
-        } else {
-          throw error;
-        }
-      }
+        })
+      );
       
-      const tagsByProject: Record<string, Tag[]> = {};
-      (data || []).forEach((pt: any) => {
-        const projectId = pt.projectId || pt.projectid;
-        if (!tagsByProject[projectId]) {
-          tagsByProject[projectId] = [];
-        }
-        if (pt.tags) {
-          tagsByProject[projectId].push(pt.tags);
-        }
-      });
-      setProjectTags(tagsByProject);
+      setProjectTags(tagMap);
     } catch (error) {
       console.error('Error loading project tags:', error);
       setProjectTags({});
@@ -116,38 +92,18 @@ export default function Projects() {
 
       // Add purpose if provided
       if (newProject.purpose) {
-        const { supabase } = await import('@/lib/supabase');
-        await supabase
-          .from('projects')
-          .update({ purpose: newProject.purpose })
-          .eq('id', project.id);
+        await apiClient.updateProject(project.id, { purpose: newProject.purpose });
       }
 
-      // Add tags to project
+      // Add tags to project using API
       if (newProject.selectedTags.length > 0) {
-        const { supabase } = await import('@/lib/supabase');
-        // Try camelCase first, fallback to snake_case
-        let tagInserts = newProject.selectedTags.map(tagId => ({
-          projectId: project.id,
-          tagId,
-        }));
-        let { error: tagError } = await supabase.from('project_tags').insert(tagInserts);
-        
-        if (tagError && (tagError.code === '42703' || tagError.message?.includes('projectId') || tagError.message?.includes('projectid'))) {
-          // Try snake_case
-          tagInserts = newProject.selectedTags.map(tagId => ({
-            projectid: project.id,
-            tagid: tagId,
-          }));
-          const result = await supabase.from('project_tags').insert(tagInserts);
-          tagError = result.error;
+        try {
+          await apiClient.updateProjectTags(project.id, newProject.selectedTags);
+        } catch (error) {
+          console.error('Error updating project tags:', error);
         }
-        
-        if (tagError && !tagError.message?.includes('does not exist')) {
-          console.error('Error inserting project tags:', tagError);
-        }
-        await loadProjectTags();
       }
+      await loadProjectTags();
 
       setNewProject({
         name: '',

@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/components/ui/use-toast';
-import { supabase } from '@/lib/supabase';
+import { apiClient } from '@/lib/api-client';
 import { 
   Users, 
   Building2, 
@@ -93,9 +93,10 @@ export default function Admin() {
                   onClick={async () => {
                     setIsRefreshingRole(true);
                     try {
-                      // Try to get role directly from database using RPC
-                      const { data: roleData, error: rpcError } = await supabase.rpc('get_current_user_role');
-                      if (!rpcError && roleData) {
+                      // Try to get role directly from database using API
+                      const roleResponse = await apiClient.getCurrentUserRole();
+                      const roleData = roleResponse.role;
+                      if (roleData) {
                         await refreshUser();
                         toast({
                           title: 'Success',

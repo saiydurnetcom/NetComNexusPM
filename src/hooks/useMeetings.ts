@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { Meeting, AISuggestion } from '../types';
-import { meetingsService } from '../lib/supabase-data';
+import { meetingsService } from '../lib/api-data';
 
 export const useMeetings = () => {
   const [meetings, setMeetings] = useState<Meeting[]>([]);

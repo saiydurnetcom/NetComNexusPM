@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { TaskComment } from '../types';
-import { taskCommentsService } from '../lib/supabase-data';
+import { taskCommentsService } from '../lib/api-data';
 
 export const useTaskComments = () => {
   const [comments, setComments] = useState<TaskComment[]>([]);

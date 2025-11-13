@@ -16,9 +16,9 @@ import { useProjects } from '@/hooks/useProjects';
 import { useAuth } from '@/hooks/useAuth';
 import { useTimeTracking } from '@/hooks/useTimeTracking';
 import { useToast } from '@/components/ui/use-toast';
-import { tasksService } from '@/lib/supabase-data';
+import { tasksService } from '@/lib/api-data';
 import { usersService } from '@/lib/users-service';
-import { supabase } from '@/lib/supabase';
+import { apiClient } from '@/lib/api-client';
 import { Task, User, Tag } from '@/types';
 import { Plus, Search, Filter, Edit, Trash2, Calendar, Clock, ArrowUpDown, CheckCircle2, Circle, PlayCircle, User as UserIcon, FolderKanban, Play, Square, Tag as TagIcon, List, Grid, LayoutGrid } from 'lucide-react';
 import { KanbanBoard } from '@/components/KanbanBoard';
@@ -98,12 +98,9 @@ export default function Tasks() {
 
   const loadTags = async () => {
     try {
-      const { data, error } = await supabase
-        .from('tags')
-        .select('*')
-        .order('name');
-      if (error) throw error;
-      setAvailableTags(data || []);
+      // Tags endpoint will be added to backend - for now use empty array
+      // TODO: Add GET /api/tags endpoint
+      setAvailableTags([]);
     } catch (error) {
       console.error('Error loading tags:', error);
     }
@@ -111,53 +108,23 @@ export default function Tasks() {
 
   const loadTaskTags = async () => {
     try {
-      // Try camelCase first, fallback to snake_case
-      let query = supabase
-        .from('task_tags')
-        .select('taskId, tagId, tags(*)');
+      // Load tags for all tasks
+      const allTasks = await tasksService.getTasks();
+      const tagMap: Record<string, Tag[]> = {};
       
-      const { data, error } = await query;
-      
-      if (error) {
-        // If camelCase fails, try snake_case
-        if (error.code === '42703' || error.message?.includes('taskId') || error.message?.includes('taskid')) {
-          const { data: snakeData, error: snakeError } = await supabase
-            .from('task_tags')
-            .select('taskid, tagid, tags(*)');
-          
-          if (snakeError) {
-            console.error('Error loading task tags:', snakeError);
-            setTaskTags({});
-            return;
+      await Promise.all(
+        allTasks.map(async (task) => {
+          try {
+            const taskTags = await apiClient.getTaskTags(task.id);
+            tagMap[task.id] = taskTags.map((tt: any) => tt.tag);
+          } catch (error) {
+            console.error(`Error loading tags for task ${task.id}:`, error);
+            tagMap[task.id] = [];
           }
-          
-          const tagsByTask: Record<string, Tag[]> = {};
-          (snakeData || []).forEach((tt: any) => {
-            const taskId = tt.taskid || tt.taskId;
-            if (!tagsByTask[taskId]) {
-              tagsByTask[taskId] = [];
-            }
-            if (tt.tags) {
-              tagsByTask[taskId].push(tt.tags);
-            }
-          });
-          setTaskTags(tagsByTask);
-          return;
-        }
-        throw error;
-      }
+        })
+      );
       
-      const tagsByTask: Record<string, Tag[]> = {};
-      (data || []).forEach((tt: any) => {
-        const taskId = tt.taskId || tt.taskid;
-        if (!tagsByTask[taskId]) {
-          tagsByTask[taskId] = [];
-        }
-        if (tt.tags) {
-          tagsByTask[taskId].push(tt.tags);
-        }
-      });
-      setTaskTags(tagsByTask);
+      setTaskTags(tagMap);
     } catch (error) {
       console.error('Error loading task tags:', error);
       setTaskTags({});
@@ -228,30 +195,15 @@ export default function Tasks() {
         dueDate: taskForm.dueDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
       });
 
-      // Add tags to task
+      // Add tags to task using API
       if (taskForm.selectedTags.length > 0) {
-        // Try camelCase first, fallback to snake_case
-        let tagInserts = taskForm.selectedTags.map(tagId => ({
-          taskId: task.id,
-          tagId,
-        }));
-        let { error: tagError } = await supabase.from('task_tags').insert(tagInserts);
-        
-        if (tagError && (tagError.code === '42703' || tagError.message?.includes('taskId') || tagError.message?.includes('taskid'))) {
-          // Try snake_case
-          tagInserts = taskForm.selectedTags.map(tagId => ({
-            taskid: task.id,
-            tagid: tagId,
-          }));
-          const result = await supabase.from('task_tags').insert(tagInserts);
-          tagError = result.error;
+        try {
+          await apiClient.updateTaskTags(task.id, taskForm.selectedTags);
+        } catch (error) {
+          console.error('Error updating task tags:', error);
         }
-        
-        if (tagError && !tagError.message?.includes('does not exist')) {
-          console.error('Error inserting task tags:', tagError);
-        }
-        await loadTaskTags();
       }
+      await loadTaskTags();
       
       setTaskForm({
         title: '',
@@ -298,48 +250,20 @@ export default function Tasks() {
     if (!editingTask || !taskForm.title.trim()) return;
 
     try {
-      // Update task via Supabase
-      const { error } = await supabase
-        .from('tasks')
-        .update({
-          title: taskForm.title,
-          description: taskForm.description,
-          priority: taskForm.priority,
-          projectId: taskForm.projectId || null,
-          dueDate: taskForm.dueDate || editingTask.dueDate,
-          updatedAt: new Date().toISOString(),
-        })
-        .eq('id', editingTask.id);
+      // Update task via API
+      await apiClient.updateTask(editingTask.id, {
+        title: taskForm.title,
+        description: taskForm.description,
+        priority: taskForm.priority,
+        projectId: taskForm.projectId || undefined,
+        dueDate: taskForm.dueDate || editingTask.dueDate,
+      });
 
-      if (error) throw error;
-
-      // Update tags - try camelCase first, fallback to snake_case
-      let deleteResult = await supabase.from('task_tags').delete().eq('taskId', editingTask.id);
-      if (deleteResult.error && (deleteResult.error.code === '42703' || deleteResult.error.message?.includes('taskId'))) {
-        await supabase.from('task_tags').delete().eq('taskid', editingTask.id);
-      }
-      
-      // Insert new tags
-      if (taskForm.selectedTags.length > 0) {
-        let tagInserts = taskForm.selectedTags.map(tagId => ({
-          taskId: editingTask.id,
-          tagId,
-        }));
-        let { error: tagError } = await supabase.from('task_tags').insert(tagInserts);
-        
-        if (tagError && (tagError.code === '42703' || tagError.message?.includes('taskId') || tagError.message?.includes('taskid'))) {
-          // Try snake_case
-          tagInserts = taskForm.selectedTags.map(tagId => ({
-            taskid: editingTask.id,
-            tagid: tagId,
-          }));
-          const result = await supabase.from('task_tags').insert(tagInserts);
-          tagError = result.error;
-        }
-        
-        if (tagError && !tagError.message?.includes('does not exist')) {
-          console.error('Error inserting task tags:', tagError);
-        }
+      // Update tags using API
+      try {
+        await apiClient.updateTaskTags(editingTask.id, taskForm.selectedTags || []);
+      } catch (error) {
+        console.error('Error updating task tags:', error);
       }
       await loadTaskTags();
 
@@ -362,12 +286,7 @@ export default function Tasks() {
 
   const handleDeleteTask = async (taskId: string) => {
     try {
-      const { error } = await supabase
-        .from('tasks')
-        .delete()
-        .eq('id', taskId);
-
-      if (error) throw error;
+      await apiClient.deleteTask(taskId);
 
       await fetchTasks();
       toast({

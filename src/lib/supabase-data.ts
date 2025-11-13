@@ -2146,41 +2146,10 @@ export const notificationsService = {
   },
 
   async markAllAsRead(): Promise<void> {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
-
-    // Use the database function
-    const { error } = await supabase.rpc('mark_all_notifications_read');
-
-    if (error) {
-      // Fallback to direct update
-      let result = await supabase
-        .from('notifications')
-        .update({
-          read: true,
-          readat: new Date().toISOString(),
-        })
-        .eq('userid', user.id)
-        .eq('read', false);
-
-      if (result.error && (
-        result.error.code === 'PGRST204' || 
-        result.error.code === '42703' ||
-        result.error.status === 400 ||
-        result.error.message?.includes('column')
-      )) {
-        result = await supabase
-          .from('notifications')
-          .update({
-            read: true,
-            readAt: new Date().toISOString(),
-          })
-          .eq('userId', user.id)
-          .eq('read', false);
-      }
-
-      if (result.error) throw result.error;
-    }
+    // RPC function replaced with API call - handled in notificationsService.markAllAsRead
+    // This function is deprecated - use notificationsService instead
+    console.warn('markAllAsRead in supabase-data is deprecated. Use notificationsService.markAllAsRead instead.');
+    return;
   },
 
   async deleteNotification(notificationId: string): Promise<void> {

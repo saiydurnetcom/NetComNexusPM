@@ -18,6 +18,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useTimeTracking } from '@/hooks/useTimeTracking';
 import { useToast } from '@/components/ui/use-toast';
 import { usersService } from '@/lib/users-service';
+import { apiClient } from '@/lib/api-client';
 import { adminService } from '@/lib/admin-service';
 import { Task, Project, User, Tag, ProjectRisk, ProjectBudgetItem, ProjectMilestone } from '@/types';
 import { TagSelector } from '@/components/TagSelector';
@@ -429,28 +430,12 @@ export default function ProjectDetail() {
         }
       }
 
-      // Add tags to task
+      // Add tags to task using API
       if (taskForm.selectedTags.length > 0) {
-        const { supabase } = await import('@/lib/supabase');
-        // Try camelCase first, fallback to snake_case
-        let tagInserts = taskForm.selectedTags.map(tagId => ({
-          taskId: task.id,
-          tagId,
-        }));
-        let { error: tagError } = await supabase.from('task_tags').insert(tagInserts);
-        
-        if (tagError && (tagError.code === '42703' || tagError.message?.includes('taskId') || tagError.message?.includes('taskid'))) {
-          // Try snake_case
-          tagInserts = taskForm.selectedTags.map(tagId => ({
-            taskid: task.id,
-            tagid: tagId,
-          }));
-          const result = await supabase.from('task_tags').insert(tagInserts);
-          tagError = result.error;
-        }
-        
-        if (tagError && !tagError.message?.includes('does not exist')) {
-          console.error('Error inserting task tags:', tagError);
+        try {
+          await apiClient.updateTaskTags(task.id, taskForm.selectedTags);
+        } catch (error) {
+          console.error('Error updating task tags:', error);
         }
       }
 

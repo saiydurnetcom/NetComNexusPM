@@ -177,61 +177,11 @@ export const adminService = {
   },
 
   async syncUsersFromAuth(): Promise<void> {
-    // Note: This requires service role access or a database function
-    // For now, we'll use a SQL function approach
-    // The migration should have created a sync function
-    const { error } = await supabase.rpc('sync_users_from_auth');
-    if (error) {
-      // If RPC function doesn't exist, try manual sync
-      if (error.code === '42883' || error.code === 'PGRST202' || error.message?.includes('does not exist') || error.message?.includes('function')) {
-        console.warn('sync_users_from_auth function does not exist. Attempting manual sync...');
-        // Fallback: Try to get current user and sync manually
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          // Try lowercase first (PostgreSQL lowercases unquoted identifiers)
-          let result = await supabase
-            .from('users')
-            .upsert({
-              id: user.id,
-              email: user.email || '',
-              firstname: user.user_metadata?.firstName || '',
-              lastname: user.user_metadata?.lastName || '',
-              role: user.user_metadata?.role || 'member',
-              isactive: true,
-              createdat: user.created_at,
-              updatedat: new Date().toISOString(),
-            }, {
-              onConflict: 'id',
-            });
-          
-          // If lowercase fails, try camelCase
-          if (result.error && (result.error.code === 'PGRST204' || result.error.message?.includes('column'))) {
-            result = await supabase
-              .from('users')
-              .upsert({
-                id: user.id,
-                email: user.email || '',
-                firstName: user.user_metadata?.firstName || '',
-                lastName: user.user_metadata?.lastName || '',
-                role: user.user_metadata?.role || 'member',
-                isActive: true,
-                createdAt: user.created_at,
-                updatedAt: new Date().toISOString(),
-              }, {
-                onConflict: 'id',
-              });
-          }
-          
-          if (result.error) {
-            throw new Error(`Failed to sync user: ${result.error.message}. Please ensure the users table exists and run the migration.`);
-          }
-          return; // Successfully synced current user
-        }
-        throw new Error('No authenticated user found. Please log in first.');
-      }
-      // Other errors
-      throw new Error(`Failed to sync users: ${error.message}. Please run the sync_users_from_auth function migration.`);
-    }
+    // Note: User sync is no longer needed with self-hosted backend
+    // Users are created directly in the users table during registration
+    // This function is kept for backward compatibility but does nothing
+    console.warn('syncUsersFromAuth is deprecated. Users are synced automatically during registration.');
+    return;
   },
 
   // Teams

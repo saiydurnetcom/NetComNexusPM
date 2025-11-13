@@ -19,7 +19,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { useTaskDependencies } from '@/hooks/useTaskDependencies';
 import { useTaskComments } from '@/hooks/useTaskComments';
 import { usersService } from '@/lib/users-service';
-import { supabase } from '@/lib/supabase';
+import { apiClient } from '@/lib/api-client';
 import { Task, User, TaskAttachment, TimeEntry } from '@/types';
 import { 
   Calendar, 
@@ -109,57 +109,24 @@ export default function TaskDetail() {
     if (!id) return;
     setIsLoading(true);
     try {
-      // Try camelCase first (migrations use quoted identifiers)
-      let result = await supabase
-        .from('tasks')
-        .select('id, projectId, title, description, status, priority, estimatedHours, assignedTo, createdBy, dueDate, createdAt, updatedAt, meetingId, reviewerId, parentTaskId')
-        .eq('id', id)
-        .single();
+      const taskData = await apiClient.getTask(id);
       
-      // If camelCase fails, try lowercase (PostgreSQL lowercases unquoted identifiers)
-      if (result.error && (
-        result.error.code === 'PGRST204' || 
-        result.error.code === '42703' ||
-        result.error.status === 400 ||
-        result.error.message?.includes('column') ||
-        result.error.message?.includes('does not exist')
-      )) {
-        result = await supabase
-          .from('tasks')
-          .select('id, projectid, title, description, status, priority, estimatedhours, assignedto, createdby, duedate, createdat, updatedat, meetingid, reviewerid, parenttaskid')
-          .eq('id', id)
-          .single();
-      }
-      
-      // If that also fails, try select('*')
-      if (result.error && (result.error.code === 'PGRST204' || result.error.message?.includes('column'))) {
-        result = await supabase
-        .from('tasks')
-        .select('*')
-        .eq('id', id)
-        .single();
-      }
-
-      if (result.error) throw result.error;
-      
-      // Normalize the returned data
-      const data = result.data;
-      const normalizedTask = {
-        id: data.id,
-        projectId: data.projectId || data.projectid || data.project_id || null,
-          title: data.title,
-        description: data.description,
-        status: data.status,
-          priority: data.priority,
-        estimatedHours: data.estimatedHours || data.estimatedhours || data.estimated_hours || 0,
-        assignedTo: data.assignedTo || data.assignedto || data.assigned_to,
-        createdBy: data.createdBy || data.createdby || data.created_by,
-        dueDate: data.dueDate || data.duedate || data.due_date,
-        createdAt: data.createdAt || data.createdat || data.created_at,
-        updatedAt: data.updatedAt || data.updatedat || data.updated_at,
-        meetingId: data.meetingId || data.meetingid || data.meeting_id || null,
-        reviewerId: data.reviewerId || data.reviewerid || data.reviewer_id || null,
-        parentTaskId: data.parentTaskId || data.parenttaskid || data.parent_task_id || null,
+      const normalizedTask: Task = {
+        id: taskData.id,
+        projectId: taskData.projectId || null,
+        title: taskData.title,
+        description: taskData.description,
+        status: taskData.status,
+        priority: taskData.priority,
+        estimatedHours: taskData.estimatedHours || 0,
+        assignedTo: taskData.assignedTo,
+        createdBy: taskData.createdBy,
+        dueDate: taskData.dueDate,
+        createdAt: taskData.createdAt,
+        updatedAt: taskData.updatedAt,
+        meetingId: taskData.meetingId || null,
+        reviewerId: taskData.reviewerId || null,
+        parentTaskId: taskData.parentTaskId || null,
       };
       
       if (normalizedTask) {
@@ -203,20 +170,14 @@ export default function TaskDetail() {
     if (!task) return;
 
     try {
-      const { error } = await supabase
-        .from('tasks')
-        .update({
-          title: editForm.title,
-          description: editForm.description,
-          priority: editForm.priority,
-          assignedTo: editForm.assignedTo,
-          dueDate: editForm.dueDate,
-          estimatedHours: editForm.estimatedHours,
-          updatedAt: new Date().toISOString(),
-        })
-        .eq('id', task.id);
-
-      if (error) throw error;
+      await apiClient.updateTask(task.id, {
+        title: editForm.title,
+        description: editForm.description,
+        priority: editForm.priority,
+        assignedTo: editForm.assignedTo,
+        dueDate: editForm.dueDate,
+        estimatedHours: editForm.estimatedHours,
+      });
 
       await loadTask();
       await fetchTasks();
@@ -238,52 +199,40 @@ export default function TaskDetail() {
   const loadAttachments = async () => {
     if (!id) return;
     try {
-      // Try camelCase first (migrations use quoted identifiers)
-      let result = await supabase
-        .from('task_attachments')
-        .select('id, taskId, fileName, fileSize, fileType, filePath, uploadedBy, createdAt')
-        .eq('taskId', id)
-        .order('createdAt', { ascending: false });
+      const attachmentsData = await apiClient.getTaskAttachments(id);
       
-      // If camelCase fails, try lowercase (PostgreSQL lowercases unquoted identifiers)
-      if (result.error && (
-        result.error.code === 'PGRST204' || 
-        result.error.code === '42703' ||
-        result.error.status === 400 ||
-        result.error.message?.includes('column') ||
-        result.error.message?.includes('does not exist')
-      )) {
-        result = await supabase
-          .from('task_attachments')
-          .select('id, taskid, filename, filesize, filetype, filepath, uploadedby, createdat')
-          .eq('taskid', id)
-          .order('createdat', { ascending: false });
-      }
+      // Get signed URLs for each attachment
+      const attachmentsWithUrls = await Promise.all(
+        attachmentsData.map(async (attachment: any) => {
+          try {
+            const url = await apiClient.getAttachmentUrl(attachment.id);
+            return {
+              id: attachment.id,
+              taskId: attachment.taskId,
+              fileName: attachment.fileName,
+              fileSize: attachment.fileSize,
+              fileType: attachment.mimeType || attachment.fileType,
+              filePath: url,
+              uploadedBy: attachment.uploadedBy || attachment.uploader?.id,
+              createdAt: attachment.createdAt,
+            };
+          } catch (error) {
+            console.error(`Failed to get URL for attachment ${attachment.id}:`, error);
+            return {
+              id: attachment.id,
+              taskId: attachment.taskId,
+              fileName: attachment.fileName,
+              fileSize: attachment.fileSize,
+              fileType: attachment.mimeType || attachment.fileType,
+              filePath: attachment.fileUrl || '',
+              uploadedBy: attachment.uploadedBy || attachment.uploader?.id,
+              createdAt: attachment.createdAt,
+            };
+          }
+        })
+      );
       
-      // If that also fails, try select('*')
-      if (result.error && (result.error.code === 'PGRST204' || result.error.message?.includes('column'))) {
-        result = await supabase
-          .from('task_attachments')
-          .select('*')
-          .eq('taskId', id)
-          .order('createdAt', { ascending: false });
-      }
-
-      if (result.error) throw result.error;
-      
-      // Normalize the returned data
-      const normalized = (result.data || []).map((a: any) => ({
-        id: a.id,
-        taskId: a.taskId || a.taskid || a.task_id,
-        fileName: a.fileName || a.filename || a.file_name,
-        fileSize: a.fileSize || a.filesize || a.file_size || 0,
-        fileType: a.fileType || a.filetype || a.file_type || '',
-        filePath: a.filePath || a.filepath || a.file_path,
-        uploadedBy: a.uploadedBy || a.uploadedby || a.uploaded_by,
-        createdAt: a.createdAt || a.createdat || a.created_at,
-      }));
-      
-      setAttachments(normalized);
+      setAttachments(attachmentsWithUrls);
     } catch (error) {
       console.error('Failed to load attachments:', error);
     }
@@ -320,16 +269,10 @@ export default function TaskDetail() {
     if (!task || !selectedReviewer || !pendingStatusChange) return;
 
     try {
-      const { error } = await supabase
-        .from('tasks')
-        .update({
-          status: pendingStatusChange,
-          reviewerId: selectedReviewer,
-          updatedAt: new Date().toISOString(),
-        })
-        .eq('id', task.id);
-
-      if (error) throw error;
+      await apiClient.updateTask(task.id, {
+        status: pendingStatusChange,
+        reviewerId: selectedReviewer,
+      });
 
       await loadTask();
       setIsReviewerDialogOpen(false);
@@ -366,37 +309,8 @@ export default function TaskDetail() {
 
     setIsUploading(true);
     try {
-      // Upload file to Supabase Storage
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${task.id}/${Date.now()}.${fileExt}`;
-      
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('task-attachments')
-        .upload(fileName, file);
-
-      if (uploadError) throw uploadError;
-
-      // Get public URL
-      const { data: urlData } = supabase.storage
-        .from('task-attachments')
-        .getPublicUrl(fileName);
-
-      // Save attachment record
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
-      const { error: insertError } = await supabase
-        .from('task_attachments')
-        .insert({
-          taskId: task.id,
-          fileName: file.name,
-          fileUrl: urlData.publicUrl,
-          fileSize: file.size,
-          mimeType: file.type,
-          uploadedBy: user.id,
-        });
-
-      if (insertError) throw insertError;
+      // Upload file using API client
+      const attachment = await apiClient.uploadTaskAttachment(task.id, file);
 
       await loadAttachments();
       toast({
@@ -420,24 +334,8 @@ export default function TaskDetail() {
     if (!task) return;
 
     try {
-      // Get attachment to delete file from storage
-      const attachment = attachments.find(a => a.id === attachmentId);
-      if (attachment) {
-        const fileName = attachment.fileUrl.split('/').pop();
-        if (fileName) {
-          await supabase.storage
-            .from('task-attachments')
-            .remove([`${task.id}/${fileName}`]);
-        }
-      }
-
-      // Delete attachment record
-      const { error } = await supabase
-        .from('task_attachments')
-        .delete()
-        .eq('id', attachmentId);
-
-      if (error) throw error;
+      // Delete attachment using API client (handles both storage and database)
+      await apiClient.deleteTaskAttachment(attachmentId);
 
       await loadAttachments();
       toast({

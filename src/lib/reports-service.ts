@@ -1,7 +1,7 @@
 import { deepseekService } from './deepseek';
 import { Project, Task, TimeEntry } from '../types';
 import { format, subWeeks, subMonths, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
-import { projectReportsService } from './supabase-data';
+import { projectReportsService } from './api-data';
 
 interface ReportData {
   projects: Project[];

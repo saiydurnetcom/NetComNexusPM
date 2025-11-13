@@ -8,7 +8,7 @@
 import { notificationPreferencesService } from './notification-preferences-service';
 import { emailService } from './email-service';
 import { pushNotificationService } from './push-notification-service';
-import { notificationsService } from './supabase-data';
+import { notificationsService } from './api-data';
 import { usersService } from './users-service';
 
 export interface NotificationTriggerOptions {

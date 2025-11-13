@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { TaskDependency } from '../types';
-import { taskDependenciesService } from '../lib/supabase-data';
+import { taskDependenciesService } from '../lib/api-data';
 
 export const useTaskDependencies = () => {
   const [dependencies, setDependencies] = useState<TaskDependency[]>([]);
