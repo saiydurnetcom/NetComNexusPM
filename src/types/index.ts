@@ -263,7 +263,7 @@ export interface ProjectMilestone {
   description?: string;
   targetDate: string;
   completedDate?: string | null;
-  status: 'pending' | 'completed' | 'overdue';
+  status: 'pending' | 'in_progress' | 'completed' | 'overdue';
   createdBy: string;
   createdAt: string;
   updatedAt: string;

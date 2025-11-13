@@ -10,7 +10,8 @@ import {
   Sparkles,
   LogOut,
   Menu,
-  Shield
+  Shield,
+  Calendar
 } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 
@@ -33,6 +34,7 @@ export default function Navigation() {
 
   const navItems = [
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { path: '/today', label: "Today's ToDos", icon: Calendar },
     { path: '/projects', label: 'Projects', icon: FolderKanban },
     { path: '/tasks', label: 'Tasks', icon: CheckSquare },
     { path: '/timesheet', label: 'Timesheet', icon: Clock },

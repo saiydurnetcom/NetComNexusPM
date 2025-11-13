@@ -13,7 +13,8 @@ import {
   X,
   Shield,
   Timer,
-  BarChart3
+  BarChart3,
+  Calendar
 } from 'lucide-react';
 import { NotificationBell } from './NotificationBell';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -29,6 +30,7 @@ export default function Sidebar() {
 
   const navItems = [
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { path: '/today', label: "Today's ToDos", icon: Calendar },
     { path: '/projects', label: 'Projects', icon: FolderKanban },
     { path: '/tasks', label: 'Tasks', icon: CheckSquare },
     { path: '/timesheet', label: 'Timesheet', icon: Clock },

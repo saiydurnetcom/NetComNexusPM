@@ -20,6 +20,7 @@ import Admin from './pages/Admin';
 import Settings from './pages/Settings';
 import TimeTrackerWidget from './pages/TimeTrackerWidget';
 import Reports from './pages/Reports';
+import Today from './pages/Today';
 
 const queryClient = new QueryClient();
 
@@ -44,6 +45,7 @@ const App = () => (
           <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+          <Route path="/today" element={<ProtectedRoute><Today /></ProtectedRoute>} />
           <Route path="/time-tracker-widget" element={<ProtectedRoute><TimeTrackerWidget /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>

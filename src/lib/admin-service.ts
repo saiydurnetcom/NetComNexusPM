@@ -744,6 +744,8 @@ export const adminService = {
         
         if (result.error && (
           result.error.code === 'PGRST200' || 
+          result.error.code === '42703' ||
+          result.error.status === 400 ||
           result.error.message?.includes('relationship')
         )) {
           // Fallback: Get project members and users separately
@@ -773,7 +775,8 @@ export const adminService = {
               console.warn('Project members table does not exist. Please run the migration.');
               return [];
             }
-            throw membersResult.error;
+            console.error('Error fetching project members:', membersResult.error);
+            return [];
           }
           
           // Get user details separately
