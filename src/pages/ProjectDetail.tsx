@@ -125,7 +125,7 @@ export default function ProjectDetail() {
     impact: 'medium' as ProjectRisk['impact'],
     status: 'identified' as ProjectRisk['status'],
     mitigationStrategy: '',
-    mitigationOwner: '',
+    mitigationOwner: 'none',
     targetMitigationDate: '',
   });
 
@@ -914,7 +914,7 @@ export default function ProjectDetail() {
                       impact: 'medium',
                       status: 'identified',
                       mitigationStrategy: '',
-                      mitigationOwner: '',
+                      mitigationOwner: 'none',
                       targetMitigationDate: '',
                     });
                     setIsRiskDialogOpen(true);
@@ -938,7 +938,7 @@ export default function ProjectDetail() {
                         impact: 'medium',
                         status: 'identified',
                         mitigationStrategy: '',
-                        mitigationOwner: '',
+                        mitigationOwner: 'none',
                         targetMitigationDate: '',
                       });
                       setIsRiskDialogOpen(true);
@@ -977,7 +977,7 @@ export default function ProjectDetail() {
                                     impact: risk.impact,
                                     status: risk.status,
                                     mitigationStrategy: risk.mitigationStrategy || '',
-                                    mitigationOwner: risk.mitigationOwner || '',
+                                    mitigationOwner: risk.mitigationOwner || 'none',
                                     targetMitigationDate: risk.targetMitigationDate ? new Date(risk.targetMitigationDate).toISOString().split('T')[0] : '',
                                   });
                                   setIsRiskDialogOpen(true);
@@ -1269,6 +1269,31 @@ export default function ProjectDetail() {
                               <CardDescription className="mt-2">{milestone.description}</CardDescription>
                             </div>
                             <div className="flex gap-2">
+                              {milestone.status !== 'completed' && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={async () => {
+                                    try {
+                                      await projectMilestonesService.updateMilestone(milestone.id, {
+                                        status: 'completed',
+                                        completedDate: new Date().toISOString(),
+                                      });
+                                      await loadMilestones();
+                                      toast({ title: 'Success', description: 'Milestone marked as completed' });
+                                    } catch (error) {
+                                      toast({
+                                        title: 'Error',
+                                        description: error instanceof Error ? error.message : 'Failed to update milestone',
+                                        variant: 'destructive',
+                                      });
+                                    }
+                                  }}
+                                  className="text-green-600 hover:text-green-700"
+                                >
+                                  <CheckCircle2 className="h-4 w-4" />
+                                </Button>
+                              )}
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -1346,6 +1371,7 @@ export default function ProjectDetail() {
                   ) : (
                     <GanttChart
                       tasks={projectTasks}
+                      milestones={milestones}
                       startDate={currentProject?.startDate ? new Date(currentProject.startDate) : undefined}
                       endDate={currentProject?.endDate ? new Date(currentProject.endDate) : undefined}
                     />
@@ -2064,7 +2090,7 @@ export default function ProjectDetail() {
                     <SelectValue placeholder="Select owner" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     {availableUsers.map((u) => (
                       <SelectItem key={u.id} value={u.id}>
                         {u.firstName} {u.lastName}
@@ -2102,7 +2128,7 @@ export default function ProjectDetail() {
                     await projectRisksService.createRisk({
                       projectId: id,
                       ...riskForm,
-                      mitigationOwner: riskForm.mitigationOwner || null,
+                      mitigationOwner: riskForm.mitigationOwner && riskForm.mitigationOwner !== 'none' ? riskForm.mitigationOwner : null,
                       targetMitigationDate: riskForm.targetMitigationDate || null,
                     });
                     toast({ title: 'Success', description: 'Risk added' });
@@ -2118,7 +2144,7 @@ export default function ProjectDetail() {
                     impact: 'medium',
                     status: 'identified',
                     mitigationStrategy: '',
-                    mitigationOwner: '',
+                    mitigationOwner: 'none',
                     targetMitigationDate: '',
                   });
                 } catch (error) {
