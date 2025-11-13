@@ -59,17 +59,7 @@ export const projectRisksService = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
 
-    // Calculate risk score based on probability and impact
-    const riskScoreMap: Record<string, number> = {
-      'low': 1,
-      'medium': 2,
-      'high': 3,
-      'critical': 4,
-    };
-    const probabilityScore = riskScoreMap[data.probability] || 2;
-    const impactScore = riskScoreMap[data.impact] || 2;
-    const calculatedRiskScore = probabilityScore * impactScore;
-
+    // Note: riskScore is a GENERATED ALWAYS column in the database, so we don't insert it
     // Try camelCase first (migrations use quoted identifiers)
     let result = await supabase
       .from('project_risks')
@@ -80,7 +70,7 @@ export const projectRisksService = {
         riskCategory: data.riskCategory,
         probability: data.probability,
         impact: data.impact,
-        riskScore: calculatedRiskScore,
+        // riskScore is GENERATED ALWAYS, so don't include it
         status: data.status || 'identified',
         mitigationStrategy: data.mitigationStrategy,
         mitigationOwner: data.mitigationOwner,
@@ -105,7 +95,7 @@ export const projectRisksService = {
           riskcategory: data.riskCategory,
           probability: data.probability,
           impact: data.impact,
-          riskscore: calculatedRiskScore,
+          // riskscore is GENERATED ALWAYS, so don't include it
           status: data.status || 'identified',
           mitigationstrategy: data.mitigationStrategy,
           mitigationowner: data.mitigationOwner,
@@ -120,9 +110,8 @@ export const projectRisksService = {
 
     const r = result.data;
     
-    // Use risk score from DB, or calculate as fallback
-    const dbRiskScore = r.riskScore || r.riskscore || r.risk_score;
-    const finalRiskScore = dbRiskScore || calculatedRiskScore;
+    // riskScore is GENERATED ALWAYS, so it should be in the response
+    const dbRiskScore = r.riskScore || r.riskscore || r.risk_score || 0;
     
     return {
       id: r.id,
@@ -132,7 +121,7 @@ export const projectRisksService = {
       riskCategory: r.riskCategory || r.riskcategory || r.risk_category,
       probability: r.probability,
       impact: r.impact,
-      riskScore: finalRiskScore,
+      riskScore: dbRiskScore,
       status: r.status,
       mitigationStrategy: r.mitigationStrategy || r.mitigationstrategy || r.mitigation_strategy,
       mitigationOwner: r.mitigationOwner || r.mitigationowner || r.mitigation_owner,
@@ -158,21 +147,8 @@ export const projectRisksService = {
     if (updates.targetMitigationDate !== undefined) updateDataCamel.targetMitigationDate = updates.targetMitigationDate;
     if (updates.actualMitigationDate !== undefined) updateDataCamel.actualMitigationDate = updates.actualMitigationDate;
     
-    // Recalculate risk score if probability or impact changed
-    if (updates.probability !== undefined || updates.impact !== undefined) {
-      const riskScoreMap: Record<string, number> = {
-        'low': 1,
-        'medium': 2,
-        'high': 3,
-        'critical': 4,
-      };
-      // Get current values or use updates
-      const probability = updates.probability || 'medium';
-      const impact = updates.impact || 'medium';
-      const probabilityScore = riskScoreMap[probability] || 2;
-      const impactScore = riskScoreMap[impact] || 2;
-      updateDataCamel.riskScore = probabilityScore * impactScore;
-    }
+    // Note: riskScore is GENERATED ALWAYS, so we don't update it manually
+    // The database will recalculate it automatically when probability or impact changes
 
     let result = await supabase
       .from('project_risks')
@@ -199,20 +175,7 @@ export const projectRisksService = {
       if (updates.targetMitigationDate !== undefined) updateDataLower.targetmitigationdate = updates.targetMitigationDate;
       if (updates.actualMitigationDate !== undefined) updateDataLower.actualmitigationdate = updates.actualMitigationDate;
       
-      // Recalculate risk score if probability or impact changed
-      if (updates.probability !== undefined || updates.impact !== undefined) {
-        const riskScoreMap: Record<string, number> = {
-          'low': 1,
-          'medium': 2,
-          'high': 3,
-          'critical': 4,
-        };
-        const probability = updates.probability || 'medium';
-        const impact = updates.impact || 'medium';
-        const probabilityScore = riskScoreMap[probability] || 2;
-        const impactScore = riskScoreMap[impact] || 2;
-        updateDataLower.riskscore = probabilityScore * impactScore;
-      }
+      // Note: riskscore is GENERATED ALWAYS, so we don't update it manually
 
       result = await supabase
         .from('project_risks')

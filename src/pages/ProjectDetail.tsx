@@ -1262,13 +1262,43 @@ export default function ProjectDetail() {
                             <div className="flex-1">
                               <CardTitle className="flex items-center gap-2">
                                 {milestone.name}
-                                <Badge variant={milestone.status === 'completed' ? 'default' : milestone.status === 'overdue' ? 'destructive' : 'secondary'}>
-                                  {milestone.status}
+                                <Badge variant={
+                                  milestone.status === 'completed' ? 'default' : 
+                                  milestone.status === 'overdue' ? 'destructive' : 
+                                  milestone.status === 'in_progress' ? 'default' : 
+                                  'secondary'
+                                }>
+                                  {milestone.status === 'in_progress' ? 'In Progress' : milestone.status}
                                 </Badge>
                               </CardTitle>
                               <CardDescription className="mt-2">{milestone.description}</CardDescription>
                             </div>
                             <div className="flex gap-2">
+                              {milestone.status === 'pending' && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={async () => {
+                                    try {
+                                      await projectMilestonesService.updateMilestone(milestone.id, {
+                                        status: 'in_progress',
+                                      });
+                                      await loadMilestones();
+                                      toast({ title: 'Success', description: 'Milestone marked as in progress' });
+                                    } catch (error) {
+                                      toast({
+                                        title: 'Error',
+                                        description: error instanceof Error ? error.message : 'Failed to update milestone',
+                                        variant: 'destructive',
+                                      });
+                                    }
+                                  }}
+                                  className="text-blue-600 hover:text-blue-700"
+                                  title="Mark as In Progress"
+                                >
+                                  <Play className="h-4 w-4" />
+                                </Button>
+                              )}
                               {milestone.status !== 'completed' && (
                                 <Button
                                   variant="ghost"
@@ -1290,6 +1320,7 @@ export default function ProjectDetail() {
                                     }
                                   }}
                                   className="text-green-600 hover:text-green-700"
+                                  title="Mark as Completed"
                                 >
                                   <CheckCircle2 className="h-4 w-4" />
                                 </Button>

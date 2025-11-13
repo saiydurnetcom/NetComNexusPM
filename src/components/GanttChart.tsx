@@ -211,14 +211,24 @@ export function GanttChart({ tasks, milestones = [], startDate, endDate, onTaskU
               return (
                 <div key={`milestone-${milestone.id}`} className="flex items-center min-h-[40px] hover:bg-gray-50">
                   <div className="w-64 p-2 border-r border-gray-200 flex items-center gap-2">
-                    <Flag className={`h-4 w-4 ${milestone.status === 'completed' ? 'text-green-600' : milestone.status === 'overdue' ? 'text-red-600' : 'text-yellow-600'}`} />
+                    <Flag className={`h-4 w-4 ${
+                      milestone.status === 'completed' ? 'text-green-600' : 
+                      milestone.status === 'overdue' ? 'text-red-600' : 
+                      milestone.status === 'in_progress' ? 'text-blue-600' : 
+                      'text-yellow-600'
+                    }`} />
                     <span className="text-sm font-semibold truncate" title={milestone.name}>
                       {milestone.name}
                     </span>
                   </div>
                   <div className="flex-1 relative h-8">
                     <div
-                      className={`absolute h-6 w-1 ${milestone.status === 'completed' ? 'bg-green-600' : milestone.status === 'overdue' ? 'bg-red-600' : 'bg-yellow-600'} shadow-lg`}
+                      className={`absolute h-6 w-1 ${
+                        milestone.status === 'completed' ? 'bg-green-600' : 
+                        milestone.status === 'overdue' ? 'bg-red-600' : 
+                        milestone.status === 'in_progress' ? 'bg-blue-600' : 
+                        'bg-yellow-600'
+                      } shadow-lg`}
                       style={{
                         left: `${leftPercent}%`,
                         top: '4px',
