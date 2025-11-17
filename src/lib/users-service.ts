@@ -1,52 +1,35 @@
-import { supabase } from './supabase';
+import { apiClient } from './api-client';
+import { authService } from './auth';
 import { User } from '../types';
 
-// Service to fetch users from Supabase auth
-// Note: Without a users table or admin access, we can only get the current user
-// In a production app, you'd create a users table synced with auth.users
+// Users service backed by API
 export const usersService = {
   async getUsers(): Promise<User[]> {
-    // For now, we can only get the current user
-    // In a real app, you'd have a users table that syncs with auth.users
-    const current = await this.getCurrentUser();
-    return current ? [current] : [];
+    try {
+      const users = await apiClient.getUsers();
+      return (users || []) as User[];
+    } catch {
+      return [];
+    }
   },
 
   async getUserById(userId: string): Promise<User | null> {
-    const { data: { user }, error } = await supabase.auth.getUser();
-    if (error || !user) return null;
-
-    // For now, we can only get the current user's info
-    // To get other users, we'd need a users table or admin access
-    if (user.id === userId) {
-      return {
-        id: user.id,
-        email: user.email || '',
-        firstName: user.user_metadata?.firstName || '',
-        lastName: user.user_metadata?.lastName || '',
-        role: user.user_metadata?.role || 'member',
-        isActive: true,
-        createdAt: user.created_at,
-      };
+    try {
+      const user = await apiClient.getUser(userId);
+      return user as User;
+    } catch {
+      return null;
     }
-
-    return null;
   },
 
   // Get current user
   async getCurrentUser(): Promise<User | null> {
-    const { data: { user }, error } = await supabase.auth.getUser();
-    if (error || !user) return null;
-
-    return {
-      id: user.id,
-      email: user.email || '',
-      firstName: user.user_metadata?.firstName || '',
-      lastName: user.user_metadata?.lastName || '',
-      role: user.user_metadata?.role || 'member',
-      isActive: true,
-      createdAt: user.created_at,
-    };
+    return await authService.getUser();
   },
+
+  // Alias used elsewhere
+  async getUser(userId: string): Promise<User | null> {
+    return this.getUserById(userId);
+  }
 };
 

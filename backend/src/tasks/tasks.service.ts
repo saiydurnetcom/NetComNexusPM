@@ -9,7 +9,7 @@ export class TasksService {
   constructor(
     private prisma: PrismaService,
     private notificationTriggerService: NotificationTriggerService,
-  ) {}
+  ) { }
 
   async create(userId: string, createTaskDto: CreateTaskDto) {
     // If projectId is provided, verify user has access
@@ -41,6 +41,7 @@ export class TasksService {
         ...createTaskDto,
         createdBy: userId,
         assignedTo: createTaskDto.assignedTo || userId,
+        dueDate: (new Date(createTaskDto.dueDate)).toISOString(),
       },
       include: {
         assignee: {

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // API Client for NestJS Backend
 // Replaces Supabase client calls with REST API calls
 
@@ -121,7 +122,7 @@ class ApiClient {
     options: RequestInit = {},
   ): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
-    let headers: HeadersInit = {
+    const headers: HeadersInit = {
       'Content-Type': 'application/json',
       ...(options.headers || {}),
     };
@@ -190,6 +191,21 @@ class ApiClient {
 
   async getProfile() {
     return this.request<any>('/auth/profile');
+  }
+
+  async updateProfile(data: { firstName?: string; lastName?: string }) {
+    return this.request<any>('/auth/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Users
+  async updateUser(id: string, data: any) {
+    return this.request<any>(`/users/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
   }
 
   // Projects
@@ -568,6 +584,169 @@ class ApiClient {
     return this.request<void>(`/projects/reports/${id}`, {
       method: 'DELETE',
     });
+  }
+
+  // Project Members
+  async getProjectMembers(projectId: string) {
+    return this.request<any[]>(`/projects/${projectId}/members`);
+  }
+
+  async addProjectMember(projectId: string, data: { userId: string; role?: 'owner' | 'member' | 'viewer' }) {
+    return this.request<void>(`/projects/${projectId}/members`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async removeProjectMember(projectId: string, memberId: string) {
+    return this.request<void>(`/projects/${projectId}/members/${memberId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Project Milestones
+  async getProjectMilestones(projectId: string) {
+    return this.request<any[]>(`/projects/${projectId}/milestones`);
+  }
+
+  async createProjectMilestone(projectId: string, data: { name: string; description?: string; targetDate: string }) {
+    return this.request<any>(`/projects/${projectId}/milestones`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateProjectMilestone(id: string, data: { name?: string; description?: string; targetDate?: string; completedDate?: string; status?: string }) {
+    return this.request<any>(`/projects/milestones/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteProjectMilestone(id: string) {
+    return this.request<void>(`/projects/milestones/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Project Risks
+  async getProjectRisks(projectId: string) {
+    return this.request<any[]>(`/projects/${projectId}/risks`);
+  }
+
+  async createProjectRisk(projectId: string, data: { title: string; description?: string; riskCategory: string; probability: string; impact: string; status?: string; mitigationStrategy?: string; mitigationOwnerId?: string; mitigationOwner?: string; targetMitigationDate?: string }) {
+    return this.request<any>(`/projects/${projectId}/risks`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateProjectRisk(id: string, data: Partial<{ title: string; description: string; riskCategory: string; probability: string; impact: string; status: string; mitigationStrategy: string; mitigationOwnerId: string; mitigationOwner: string; targetMitigationDate: string; actualMitigationDate: string }>) {
+    return this.request<any>(`/projects/risks/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteProjectRisk(id: string) {
+    return this.request<void>(`/projects/risks/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Project Budget
+  async getProjectBudget(projectId: string) {
+    return this.request<any[]>(`/projects/${projectId}/budget`);
+  }
+
+  async createProjectBudgetItem(projectId: string, data: { category: string; description?: string; budgetedAmount: number; actualAmount?: number; currency?: string }) {
+    return this.request<any>(`/projects/${projectId}/budget`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateProjectBudgetItem(id: string, data: Partial<{ category: string; description: string; budgetedAmount: number; actualAmount: number; currency: string }>) {
+    return this.request<any>(`/projects/budget/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteProjectBudgetItem(id: string) {
+    return this.request<void>(`/projects/budget/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Teams
+  async getTeams() {
+    return this.request<any[]>('/teams');
+  }
+
+  async createTeam(data: { name: string; description?: string; departmentId?: string; teamLeadId?: string }) {
+    return this.request<any>('/teams', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateTeam(id: string, data: Partial<{ name: string; description: string; departmentId: string; teamLeadId: string }>) {
+    return this.request<any>(`/teams/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteTeam(id: string) {
+    return this.request<void>(`/teams/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Departments
+  async getDepartments() {
+    return this.request<any[]>('/departments');
+  }
+
+  async createDepartment(data: { name: string; description?: string }) {
+    return this.request<any>('/departments', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateDepartment(id: string, data: Partial<{ name: string; description: string }>) {
+    return this.request<any>(`/departments/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteDepartment(id: string) {
+    return this.request<void>(`/departments/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Settings (admin)
+  async getSettings() {
+    return this.request<any>('/settings');
+  }
+
+  async updateSettings(data: Partial<{
+    aiApiKey: string; aiApiUrl: string; aiModel: string;
+    emailEnabled: boolean; emailApiUrl: string; emailApiKey: string; emailFrom: string; emailProvider: 'resend' | 'sendgrid' | 'ses' | 'custom';
+    pushEnabled: boolean; pushVapidPublicKey: string; pushVapidPrivateKey: string;
+  }>) {
+    return this.request<any>('/settings', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getPublicSettings() {
+    return this.request<any>('/settings/public');
   }
 }
 

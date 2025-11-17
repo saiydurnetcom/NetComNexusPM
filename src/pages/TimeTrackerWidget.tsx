@@ -12,6 +12,9 @@ import { useToast } from '@/components/ui/use-toast';
 import { Play, Square, Clock, X, Download, Search } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { Task } from '@/types';
+import { apiClient } from '@/lib/api-client';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -30,12 +33,14 @@ export default function TimeTrackerWidget() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showInstallButton, setShowInstallButton] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [activeTaskDetail, setActiveTaskDetail] = useState<Task | null>(null);
+  const [showMyTasksOnly, setShowMyTasksOnly] = useState(true);
 
   useEffect(() => {
     fetchTasks();
     fetchProjects();
     fetchTimeEntries();
-    
+
     // Refresh active timer every second
     const interval = setInterval(() => {
       fetchTimeEntries();
@@ -69,7 +74,7 @@ export default function TimeTrackerWidget() {
 
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
-    
+
     if (outcome === 'accepted') {
       toast({
         title: 'Installing...',
@@ -77,7 +82,7 @@ export default function TimeTrackerWidget() {
       });
       setShowInstallButton(false);
     }
-    
+
     setDeferredPrompt(null);
   };
 
@@ -89,14 +94,26 @@ export default function TimeTrackerWidget() {
     }
 
     const updateElapsed = () => {
-      const start = new Date(activeTimer.startTime).getTime();
+      let start = NaN;
+      const st: unknown = activeTimer.startTime as unknown;
+      if (typeof st === 'string') {
+        start = Date.parse(st);
+      } else if (typeof st === 'number') {
+        start = st;
+      } else if (st && typeof (st as Date).getTime === 'function') {
+        start = (st as Date).getTime();
+      }
+      if (Number.isNaN(start)) {
+        setElapsedTime('00:00:00');
+        return;
+      }
       const now = Date.now();
       const diff = now - start;
-      
+
       const hours = Math.floor(diff / (1000 * 60 * 60));
       const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
       const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-      
+
       setElapsedTime(
         `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
       );
@@ -108,10 +125,40 @@ export default function TimeTrackerWidget() {
     return () => clearInterval(interval);
   }, [activeTimer]);
 
+  // Resolve active task details for display (fallback fetch if not loaded in list)
+  useEffect(() => {
+    const resolveActiveTask = async () => {
+      if (!activeTimer?.taskId) {
+        setActiveTaskDetail(null);
+        return;
+      }
+      const local = tasks.find(t => t.id === activeTimer.taskId);
+      if (local) {
+        setActiveTaskDetail(local);
+        return;
+      }
+      try {
+        const fetched = await apiClient.getTask(activeTimer.taskId);
+        if (fetched) {
+          setActiveTaskDetail(fetched as Task);
+        }
+      } catch {
+        setActiveTaskDetail(null);
+      }
+    };
+    resolveActiveTask();
+  }, [activeTimer, tasks]);
+
   const getTaskName = () => {
     if (!activeTimer) return 'No active timer';
-    const task = tasks.find(t => t.id === activeTimer.taskId);
-    return task ? task.title : 'Unknown Task';
+    const apiTask = (activeTimer as unknown as { task?: { id?: string; title?: string } }).task;
+    if (apiTask && typeof apiTask.title === 'string' && apiTask.title.length > 0) {
+      return apiTask.title;
+    }
+    const task = tasks.find(t => t.id === activeTimer.taskId) || activeTaskDetail;
+    if (task) return task.title;
+    if (activeTimer.taskId) return 'Loading task...';
+    return 'Unknown Task';
   };
 
   const handleTaskSelect = (taskId: string) => {
@@ -120,8 +167,11 @@ export default function TimeTrackerWidget() {
 
   const handleStartTimer = async () => {
     if (!selectedTaskId) return;
-    
+
     try {
+      // Optimistically set task detail so UI shows correct title immediately
+      const local = tasks.find(t => t.id === selectedTaskId);
+      if (local) setActiveTaskDetail(local);
       await startTimer(selectedTaskId);
       setSelectedTaskId(null);
       toast({
@@ -143,9 +193,10 @@ export default function TimeTrackerWidget() {
 
   const handleStopTimer = async () => {
     if (!activeTimer) return;
-    
+
     try {
       await stopTimer(activeTimer.id);
+      setActiveTaskDetail(null);
       toast({
         title: 'Timer Stopped',
         description: 'Time entry saved',
@@ -160,13 +211,18 @@ export default function TimeTrackerWidget() {
   };
 
   const getProjectName = (task: Task) => {
-    if (!task.projectId) return null;
+    if (!task?.projectId) return null;
     const project = projects.find(p => p.id === task.projectId);
     return project?.name || null;
   };
 
   const availableTasks = tasks
     .filter(t => t.status !== 'COMPLETED')
+    .filter(t => {
+      if (!showMyTasksOnly) return true;
+      if (!user?.id) return true;
+      return t.assignedTo === user.id;
+    })
     .filter(t => {
       if (!searchQuery) return true;
       const query = searchQuery.toLowerCase();
@@ -275,7 +331,12 @@ export default function TimeTrackerWidget() {
                   Running
                 </Badge>
                 <span className="text-xs text-muted-foreground">
-                  Started {formatDistanceToNow(new Date(activeTimer.startTime), { addSuffix: true })}
+                  {(() => {
+                    const d = activeTimer.startTime ? new Date(activeTimer.startTime as unknown as string) : null;
+                    return d && !isNaN(d.getTime())
+                      ? `Started ${formatDistanceToNow(d, { addSuffix: true })}`
+                      : 'Started just now';
+                  })()}
                 </span>
               </div>
               <h3 className="font-semibold text-lg mb-2 truncate">{getTaskName()}</h3>
@@ -328,7 +389,19 @@ export default function TimeTrackerWidget() {
               <h2 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide">
                 Select Task to Track
               </h2>
-              
+
+              {/* Filters */}
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Switch
+                    id="my-tasks-only"
+                    checked={showMyTasksOnly}
+                    onCheckedChange={setShowMyTasksOnly}
+                  />
+                  <Label htmlFor="my-tasks-only" className="text-sm">My tasks only</Label>
+                </div>
+              </div>
+
               {/* Search */}
               <div className="relative mb-3">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -374,7 +447,7 @@ export default function TimeTrackerWidget() {
                     <div className="text-center py-8">
                       <Clock className="h-12 w-12 mx-auto mb-2 text-gray-400" />
                       <p className="text-sm text-muted-foreground">
-                        {searchQuery 
+                        {searchQuery
                           ? 'No tasks found matching your search'
                           : 'No tasks available. Create tasks in the main app.'}
                       </p>

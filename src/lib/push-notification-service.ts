@@ -70,6 +70,19 @@ class PushNotificationService {
     }
 
     try {
+      // Ensure we have a VAPID key (from env or backend public settings)
+      if (!this.vapidPublicKey) {
+        try {
+          const { apiClient } = await import('./api-client');
+          const publicSettings = await apiClient.getPublicSettings();
+          if (publicSettings?.pushVapidPublicKey) {
+            this.vapidPublicKey = publicSettings.pushVapidPublicKey;
+          }
+        } catch (e) {
+          console.warn('[Push Service] Failed to load public settings for VAPID key', e);
+        }
+      }
+
       const subscription = await this.registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: this.vapidPublicKey ? this.urlBase64ToUint8Array(this.vapidPublicKey) : undefined,

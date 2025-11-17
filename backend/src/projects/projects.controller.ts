@@ -41,7 +41,7 @@ export class ProjectsController {
     private readonly projectBudgetService: ProjectBudgetService,
     private readonly projectReportsService: ProjectReportsService,
     private readonly prisma: PrismaService,
-  ) {}
+  ) { }
 
   @Post()
   create(@CurrentUser() user: any, @Body() createProjectDto: CreateProjectDto) {
@@ -53,25 +53,6 @@ export class ProjectsController {
     return this.projectsService.findAll(user.id);
   }
 
-  @Get(':id')
-  findOne(@CurrentUser() user: any, @Param('id') id: string) {
-    return this.projectsService.findOne(id, user.id);
-  }
-
-  @Patch(':id')
-  update(
-    @CurrentUser() user: any,
-    @Param('id') id: string,
-    @Body() updateProjectDto: UpdateProjectDto,
-  ) {
-    return this.projectsService.update(id, user.id, updateProjectDto);
-  }
-
-  @Delete(':id')
-  remove(@CurrentUser() user: any, @Param('id') id: string) {
-    return this.projectsService.remove(id, user.id);
-  }
-
   // Project Tags
   @Post(':id/tags')
   async updateTags(
@@ -81,12 +62,12 @@ export class ProjectsController {
   ) {
     // Verify project exists and user has access
     await this.projectsService.findOne(id, user.id);
-    
+
     // Delete existing tags
     await this.prisma.projectTag.deleteMany({
       where: { projectId: id },
     });
-    
+
     // Add new tags
     if (tagIds && tagIds.length > 0) {
       await this.prisma.projectTag.createMany({
@@ -97,7 +78,7 @@ export class ProjectsController {
         skipDuplicates: true,
       });
     }
-    
+
     return { message: 'Tags updated successfully' };
   }
 
@@ -252,5 +233,24 @@ export class ProjectsController {
   @Delete('reports/:id')
   removeReport(@CurrentUser() user: any, @Param('id') id: string) {
     return this.projectReportsService.remove(id, user.id);
+  }
+
+  @Get(':id')
+  findOne(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.projectsService.findOne(id, user.id);
+  }
+
+  @Patch(':id')
+  update(
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @Body() updateProjectDto: UpdateProjectDto,
+  ) {
+    return this.projectsService.update(id, user.id, updateProjectDto);
+  }
+
+  @Delete(':id')
+  remove(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.projectsService.remove(id, user.id);
   }
 }

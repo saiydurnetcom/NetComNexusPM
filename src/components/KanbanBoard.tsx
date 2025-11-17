@@ -13,6 +13,7 @@ import {
   useSensors,
   closestCorners,
 } from '@dnd-kit/core';
+import { useDroppable } from '@dnd-kit/core';
 import {
   SortableContext,
   verticalListSortingStrategy,
@@ -77,10 +78,21 @@ export function KanbanBoard({ tasks, onTaskStatusChange, showProject = false, us
     if (!over || !onTaskStatusChange) return;
 
     const taskId = active.id as string;
-    const newStatus = over.id as Task['status'];
+    const overId = over.id as string;
+
+    // Determine the intended new status:
+    // - If dropping over a column, overId will be the column id (status)
+    // - If dropping over another task, infer status from that task
+    let newStatus: Task['status'] | undefined;
+    if ((statusOrder as string[]).includes(overId)) {
+      newStatus = overId as Task['status'];
+    } else {
+      const overTask = tasks.find(t => t.id === overId);
+      newStatus = overTask?.status;
+    }
 
     const task = tasks.find(t => t.id === taskId);
-    if (!task || task.status === newStatus) return;
+    if (!task || !newStatus || task.status === newStatus) return;
 
     try {
       await onTaskStatusChange(taskId, newStatus);
@@ -139,58 +151,18 @@ export function KanbanBoard({ tasks, onTaskStatusChange, showProject = false, us
       onDragEnd={handleDragEnd}
     >
       <div className="flex gap-4 overflow-x-auto pb-4" style={{ minHeight: '600px' }}>
-        {statusOrder.map((status) => {
-          const statusTasks = getTasksByStatus(status);
-          const config = statusConfig[status];
-
-          return (
-            <div
-              key={status}
-              className="flex-shrink-0 w-80"
-            >
-              <div className={`${config.bgColor} rounded-t-lg p-3 border-b-2 border-gray-300`}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    {getStatusIcon(status)}
-                    <h3 className={`font-semibold ${config.color}`}>
-                      {config.label}
-                    </h3>
-                  </div>
-                  <Badge variant="secondary" className="bg-white/50">
-                    {statusTasks.length}
-                  </Badge>
-                </div>
-              </div>
-
-              <SortableContext
-                items={statusTasks.map(t => t.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                <div
-                  id={status}
-                  className="bg-gray-50 rounded-b-lg p-2 min-h-[500px] space-y-2"
-                  style={{ maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}
-                >
-                  {statusTasks.map((task) => (
-                    <TaskCard
-                      key={task.id}
-                      task={task}
-                      showProject={showProject}
-                      getUserInitials={getUserInitials}
-                      getUserName={getUserName}
-                      getPriorityColor={getPriorityColor}
-                    />
-                  ))}
-                  {statusTasks.length === 0 && (
-                    <div className="text-center py-8 text-gray-400 text-sm">
-                      No tasks
-                    </div>
-                  )}
-                </div>
-              </SortableContext>
-            </div>
-          );
-        })}
+        {statusOrder.map((status) => (
+          <KanbanColumn
+            key={status}
+            status={status}
+            statusTasks={getTasksByStatus(status)}
+            config={statusConfig[status]}
+            showProject={showProject}
+            getUserInitials={getUserInitials}
+            getUserName={getUserName}
+            getPriorityColor={getPriorityColor}
+          />
+        ))}
       </div>
 
       <DragOverlay>
@@ -206,6 +178,68 @@ export function KanbanBoard({ tasks, onTaskStatusChange, showProject = false, us
         )}
       </DragOverlay>
     </DndContext>
+  );
+}
+
+interface KanbanColumnProps {
+  status: Task['status'];
+  statusTasks: Task[];
+  config: { label: string; color: string; bgColor: string };
+  showProject: boolean;
+  getUserInitials: (userId: string) => string;
+  getUserName: (userId: string) => string;
+  getPriorityColor: (priority: Task['priority']) => string;
+}
+
+function KanbanColumn({
+  status,
+  statusTasks,
+  config,
+  showProject,
+  getUserInitials,
+  getUserName,
+  getPriorityColor,
+}: KanbanColumnProps) {
+  const { setNodeRef: setColumnDroppableRef } = useDroppable({ id: status });
+
+  return (
+    <div className="flex-shrink-0 w-80">
+      <div className={`${config.bgColor} rounded-t-lg p-3 border-b-2 border-gray-300`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {/* Column icon */}
+            {/* We can't call getStatusIcon here as it's within KanbanBoard scope; replicate visuals */}
+            <h3 className={`font-semibold ${config.color}`}>{config.label}</h3>
+          </div>
+          <Badge variant="secondary" className="bg-white/50">
+            {statusTasks.length}
+          </Badge>
+        </div>
+      </div>
+
+      <SortableContext items={statusTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+        <div
+          ref={setColumnDroppableRef}
+          id={status}
+          className="bg-gray-50 rounded-b-lg p-2 min-h-[500px] space-y-2"
+          style={{ maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}
+        >
+          {statusTasks.map((task) => (
+            <TaskCard
+              key={task.id}
+              task={task}
+              showProject={showProject}
+              getUserInitials={getUserInitials}
+              getUserName={getUserName}
+              getPriorityColor={getPriorityColor}
+            />
+          ))}
+          {statusTasks.length === 0 && (
+            <div className="text-center py-8 text-gray-400 text-sm">No tasks</div>
+          )}
+        </div>
+      </SortableContext>
+    </div>
   );
 }
 

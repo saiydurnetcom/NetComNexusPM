@@ -676,12 +676,22 @@ model AllowedDomain {
 }
 
 model Setting {
-  id        String   @id @default("default")
-  aiApiKey  String?  @map("aiApiKey")
-  aiApiUrl  String?  @map("aiApiUrl")
-  aiModel   String   @default("deepseek-reasoner") @map("aiModel")
-  updatedBy String?  @map("updatedBy")
-  updatedAt DateTime @updatedAt @map("updatedAt")
+  id                  String   @id @default(uuid())
+  aiApiKey            String?  @map("aiApiKey")
+  aiApiUrl            String?  @map("aiApiUrl")
+  aiModel             String   @default("deepseek-reasoner") @map("aiModel")
+  // Email settings
+  emailEnabled        Boolean  @default(false) @map("emailEnabled")
+  emailApiUrl         String?  @map("emailApiUrl")
+  emailApiKey         String?  @map("emailApiKey")
+  emailFrom           String?  @map("emailFrom")
+  emailProvider       String?  @map("emailProvider")
+  // Push settings
+  pushEnabled         Boolean  @default(false) @map("pushEnabled")
+  pushVapidPublicKey  String?  @map("pushVapidPublicKey")
+  pushVapidPrivateKey String?  @map("pushVapidPrivateKey")
+  updatedBy           String?  @map("updatedBy")
+  updatedAt           DateTime @updatedAt @map("updatedAt")
 
   // Relations
   updater User? @relation(fields: [updatedBy], references: [id], onDelete: SetNull)

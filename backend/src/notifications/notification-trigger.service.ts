@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationType } from '@prisma/client';
+import { SettingsService } from '../settings/settings.service';
 
 export interface TriggerNotificationDto {
   userId: string;
@@ -14,7 +15,28 @@ export interface TriggerNotificationDto {
 
 @Injectable()
 export class NotificationTriggerService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(NotificationTriggerService.name);
+  private cachedSettings: any | null = null;
+  private cachedAt = 0;
+  private readonly cacheTtlMs = 60_000; // 60s
+
+  constructor(private prisma: PrismaService, private settingsService: SettingsService) {}
+
+  private async getRuntimeSettings() {
+    const now = Date.now();
+    if (this.cachedSettings && now - this.cachedAt < this.cacheTtlMs) {
+      return this.cachedSettings;
+    }
+    const full = await this.settingsService.getSettings();
+    this.cachedSettings = {
+      emailEnabled: !!full.emailEnabled,
+      pushEnabled: !!full.pushEnabled,
+      pushVapidPublicKey: full.pushVapidPublicKey,
+      emailProvider: full.emailProvider,
+    };
+    this.cachedAt = now;
+    return this.cachedSettings;
+  }
 
   async triggerNotification(dto: TriggerNotificationDto) {
     // Check user notification preferences
@@ -30,6 +52,19 @@ export class NotificationTriggerService {
       if (dto.type === 'PROJECT_UPDATED' && !preferences.projectUpdates) {
         return; // User disabled project update notifications
       }
+    }
+
+    // Read runtime settings (email/push) with small TTL cache
+    const runtime = await this.getRuntimeSettings();
+
+    // Future: If runtime.emailEnabled -> send email via configured provider
+    if (runtime.emailEnabled) {
+      this.logger.debug(`Email notifications enabled via ${runtime.emailProvider || 'unknown'} (not implemented).`);
+    }
+
+    // Future: If runtime.pushEnabled -> enqueue web push using VAPID public key
+    if (runtime.pushEnabled) {
+      this.logger.debug(`Push notifications enabled (public key present: ${!!runtime.pushVapidPublicKey}).`);
     }
 
     return this.prisma.notification.create({

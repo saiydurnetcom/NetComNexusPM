@@ -5,7 +5,7 @@ import { UpdateRiskDto } from './dto/update-risk.dto';
 
 @Injectable()
 export class ProjectRisksService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async create(projectId: string, userId: string, createRiskDto: CreateRiskDto) {
     const project = await this.prisma.project.findUnique({
@@ -35,12 +35,12 @@ export class ProjectRisksService {
         riskScore,
         status: createRiskDto.status || 'IDENTIFIED',
         mitigationStrategy: createRiskDto.mitigationStrategy,
-        mitigationOwnerId: createRiskDto.mitigationOwnerId,
-        targetMitigationDate: createRiskDto.targetMitigationDate 
-          ? new Date(createRiskDto.targetMitigationDate) 
+        mitigationOwner: createRiskDto.mitigationOwnerId ? { connect: { id: createRiskDto.mitigationOwnerId } } : undefined,
+        targetMitigationDate: createRiskDto.targetMitigationDate
+          ? new Date(createRiskDto.targetMitigationDate)
           : undefined,
-        projectId,
-        createdBy: userId,
+        project: { connect: { id: projectId } },
+        creator: { connect: { id: userId } },
       },
     });
   }

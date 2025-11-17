@@ -22,6 +22,15 @@ export class SettingsService {
     return settings;
   }
 
+  async getPublicSettings() {
+    const settings = await this.getSettings();
+    return {
+      emailEnabled: !!settings.emailEnabled,
+      pushEnabled: !!settings.pushEnabled,
+      pushVapidPublicKey: settings.pushVapidPublicKey || null,
+    };
+  }
+
   async updateSettings(userId: string, updateSettingsDto: UpdateSettingsDto) {
     return this.prisma.setting.upsert({
       where: { id: 'default' },

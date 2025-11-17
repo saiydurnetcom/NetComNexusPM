@@ -103,13 +103,6 @@ export default function Dashboard() {
   useEffect(() => {
     const calculateProductivity = async () => {
       try {
-        const { supabase } = await import('@/lib/supabase');
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          setProductivity(0);
-          return;
-        }
-
         // Get current week start (Monday)
         const today = new Date();
         const dayOfWeek = today.getDay();
@@ -118,46 +111,11 @@ export default function Dashboard() {
         weekStart.setDate(today.getDate() - diff);
         weekStart.setHours(0, 0, 0, 0);
 
-        // Get available hours for this week (default 40)
+        // Available hours for this week (default 40)
         const weekStartStr = weekStart.toISOString().split('T')[0];
-        // Try camelCase first
-        let weeklyResult = await supabase
-          .from('user_weekly_hours')
-          .select('availableHours')
-          .eq('userId', user.id)
-          .eq('weekStartDate', weekStartStr)
-          .maybeSingle();
-        
-        // If camelCase fails, try lowercase
-        if (weeklyResult.error && (
-          weeklyResult.error.code === 'PGRST204' || 
-          weeklyResult.error.code === '42703' ||
-          weeklyResult.error.status === 400 ||
-          weeklyResult.error.message?.includes('column') ||
-          weeklyResult.error.message?.includes('does not exist')
-        )) {
-          weeklyResult = await supabase
-            .from('user_weekly_hours')
-            .select('availablehours')
-            .eq('userid', user.id)
-            .eq('weekstartdate', weekStartStr)
-            .maybeSingle();
-        }
-        
-        // If table doesn't exist, just use default (don't throw error)
-        if (weeklyResult.error && (
-          weeklyResult.error.code === '42P01' || 
-          weeklyResult.error.code === 'PGRST202' ||
-          weeklyResult.error.message?.includes('does not exist')
-        )) {
-          weeklyResult = { data: null, error: null };
-        }
-        
-        const weeklyHours = weeklyResult.data ? {
-          availableHours: weeklyResult.data.availableHours || weeklyResult.data.availablehours || weeklyResult.data.available_hours
-        } : null;
 
-        const hours = (weeklyHours?.availableHours as number) || 40;
+        // Use default available hours (40) unless you later wire a backend endpoint
+        const hours = 40;
         setAvailableHours(hours);
         const availableMinutes = hours * 60;
 

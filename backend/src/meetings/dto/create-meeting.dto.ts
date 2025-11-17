@@ -1,3 +1,4 @@
+import { Transform } from 'class-transformer';
 import { IsString, IsNotEmpty, IsDateString, IsOptional } from 'class-validator';
 
 export class CreateMeetingDto {
@@ -15,6 +16,6 @@ export class CreateMeetingDto {
 
   @IsDateString()
   @IsNotEmpty()
-  meetingDate: string;
+  @Transform(({ value }) => new Date(value).toISOString())
+  meetingDate: Date;
 }
-
