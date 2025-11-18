@@ -1,12 +1,14 @@
-version: '3.8'
-
 services:
   backend:
     build:
-      context: .
-      dockerfile: Dockerfile.backend
+      context: ../backend
+      dockerfile: Dockerfile
       target: production
     container_name: nexuspm-backend-prod
+    ports:
+      - "${BACKEND_PORT:-3000}:3000"
+    env_file:
+      - .env
     environment:
       NODE_ENV: production
       PORT: 3000
@@ -23,17 +25,20 @@ services:
       AI_API_KEY: ${AI_API_KEY}
       AI_API_URL: ${AI_API_URL}
       AI_MODEL: ${AI_MODEL}
-    command: sh -c "pnpm prisma migrate deploy && node dist/main"
     networks:
       - nexuspm-network
     restart: unless-stopped
 
   frontend:
     build:
-      context: .
-      dockerfile: Dockerfile.frontend
+      context: ..
+      dockerfile: Dockerfile
       target: production
     container_name: nexuspm-frontend-prod
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"
+    env_file:
+      - .env
     environment:
       VITE_API_URL: ${VITE_API_URL}
     depends_on:
@@ -41,10 +46,6 @@ services:
     networks:
       - nexuspm-network
     restart: unless-stopped
-
-volumes:
-  postgres_data:
-    driver: local
 
 networks:
   nexuspm-network:
