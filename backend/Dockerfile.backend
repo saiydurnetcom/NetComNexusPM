@@ -45,14 +45,11 @@ COPY backend/package.json backend/pnpm-lock.yaml ./
 # Install production dependencies
 RUN pnpm install --prod --frozen-lockfile
 
-# Install Prisma CLI globally (needed for migrations and client generation)
-RUN npm install -g prisma@5.7.1
-
 # Copy Prisma files
 COPY backend/prisma ./prisma
 
 # Generate Prisma Client
-RUN prisma generate
+RUN pnpm prisma generate
 
 # Copy built application
 COPY --from=build /app/dist ./dist

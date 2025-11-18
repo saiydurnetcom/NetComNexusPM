@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -21,8 +21,23 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
+const resolveStartTimestamp = (value: unknown): number | null => {
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  if (typeof value === 'number') {
+    return Number.isNaN(value) ? null : value;
+  }
+  if (value && typeof (value as Date).getTime === 'function') {
+    const timestamp = (value as Date).getTime();
+    return Number.isNaN(timestamp) ? null : timestamp;
+  }
+  return null;
+};
+
 export default function TimeTrackerWidget() {
-  const { user } = useAuth();
+  const { user, isLoading: isAuthLoading } = useAuth();
   const { activeTimer, startTimer, stopTimer, fetchTimeEntries } = useTimeTracking();
   const { tasks, fetchTasks } = useTasks();
   const { projects, fetchProjects } = useProjects();
@@ -36,7 +51,38 @@ export default function TimeTrackerWidget() {
   const [activeTaskDetail, setActiveTaskDetail] = useState<Task | null>(null);
   const [showMyTasksOnly, setShowMyTasksOnly] = useState(true);
 
+  const activeTimerTaskId = useMemo(() => {
+    if (!activeTimer) return null;
+    if (typeof activeTimer.taskId === 'string' && activeTimer.taskId.length > 0) {
+      return activeTimer.taskId;
+    }
+    const apiTask = (activeTimer as unknown as { task?: { id?: string } }).task;
+    if (apiTask && typeof apiTask.id === 'string' && apiTask.id.length > 0) {
+      return apiTask.id;
+    }
+    return null;
+  }, [activeTimer]);
+
+  const activeTimerStartTimestamp = useMemo(
+    () => (activeTimer ? resolveStartTimestamp(activeTimer.startTime) : null),
+    [activeTimer],
+  );
+
+  const displayActiveTimer = useMemo(() => {
+    if (!activeTimer || typeof (activeTimer as { id?: string }).id !== 'string') {
+      return null;
+    }
+    if (!activeTimerTaskId && activeTimerStartTimestamp === null) {
+      return null;
+    }
+    return activeTimer;
+  }, [activeTimer, activeTimerTaskId, activeTimerStartTimestamp]);
+
   useEffect(() => {
+    if (isAuthLoading || !user?.id) {
+      return;
+    }
+
     fetchTasks();
     fetchProjects();
     fetchTimeEntries();
@@ -47,7 +93,7 @@ export default function TimeTrackerWidget() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [fetchTasks, fetchProjects, fetchTimeEntries]);
+  }, [fetchTasks, fetchProjects, fetchTimeEntries, isAuthLoading, user?.id]);
 
   // PWA Install Prompt
   useEffect(() => {
@@ -88,27 +134,17 @@ export default function TimeTrackerWidget() {
 
   // Update elapsed time display
   useEffect(() => {
-    if (!activeTimer) {
+    if (!displayActiveTimer || !activeTimerStartTimestamp) {
       setElapsedTime('00:00:00');
       return;
     }
 
     const updateElapsed = () => {
-      let start = NaN;
-      const st: unknown = activeTimer.startTime as unknown;
-      if (typeof st === 'string') {
-        start = Date.parse(st);
-      } else if (typeof st === 'number') {
-        start = st;
-      } else if (st && typeof (st as Date).getTime === 'function') {
-        start = (st as Date).getTime();
-      }
-      if (Number.isNaN(start)) {
+      const diff = Date.now() - activeTimerStartTimestamp;
+      if (diff < 0 || Number.isNaN(diff)) {
         setElapsedTime('00:00:00');
         return;
       }
-      const now = Date.now();
-      const diff = now - start;
 
       const hours = Math.floor(diff / (1000 * 60 * 60));
       const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
@@ -123,22 +159,22 @@ export default function TimeTrackerWidget() {
     const interval = setInterval(updateElapsed, 1000);
 
     return () => clearInterval(interval);
-  }, [activeTimer]);
+  }, [displayActiveTimer, activeTimerStartTimestamp]);
 
   // Resolve active task details for display (fallback fetch if not loaded in list)
   useEffect(() => {
     const resolveActiveTask = async () => {
-      if (!activeTimer?.taskId) {
+      if (!activeTimerTaskId) {
         setActiveTaskDetail(null);
         return;
       }
-      const local = tasks.find(t => t.id === activeTimer.taskId);
+      const local = tasks.find(t => t.id === activeTimerTaskId);
       if (local) {
         setActiveTaskDetail(local);
         return;
       }
       try {
-        const fetched = await apiClient.getTask(activeTimer.taskId);
+        const fetched = await apiClient.getTask(activeTimerTaskId);
         if (fetched) {
           setActiveTaskDetail(fetched as Task);
         }
@@ -147,26 +183,50 @@ export default function TimeTrackerWidget() {
       }
     };
     resolveActiveTask();
-  }, [activeTimer, tasks]);
+  }, [activeTimerTaskId, tasks]);
 
   const getTaskName = () => {
-    if (!activeTimer) return 'No active timer';
-    const apiTask = (activeTimer as unknown as { task?: { id?: string; title?: string } }).task;
-    if (apiTask && typeof apiTask.title === 'string' && apiTask.title.length > 0) {
-      return apiTask.title;
+    if (!displayActiveTimer) return 'No active timer';
+    const apiTask = (displayActiveTimer as unknown as { task?: { id?: string; title?: string } }).task;
+    if (apiTask && typeof apiTask.title === 'string') {
+      const trimmed = apiTask.title.trim();
+      if (trimmed.length > 0) {
+        return trimmed;
+      }
     }
-    const task = tasks.find(t => t.id === activeTimer.taskId) || activeTaskDetail;
+    const task =
+      (activeTimerTaskId ? tasks.find(t => t.id === activeTimerTaskId) : undefined) ||
+      (activeTaskDetail && (!activeTimerTaskId || activeTaskDetail.id === activeTimerTaskId) ? activeTaskDetail : null);
     if (task) return task.title;
-    if (activeTimer.taskId) return 'Loading task...';
+    if (activeTimerTaskId) return 'Loading task...';
     return 'Unknown Task';
   };
 
   const handleTaskSelect = (taskId: string) => {
+    // Prevent selecting a task that already has an active timer
+    if (activeTimerTaskId && activeTimerTaskId === taskId) {
+      toast({
+        title: 'Task Already Active',
+        description: 'This task is already being tracked',
+        variant: 'destructive',
+      });
+      return;
+    }
     setSelectedTaskId(taskId);
   };
 
   const handleStartTimer = async () => {
     if (!selectedTaskId) return;
+
+    // Prevent starting a new timer if one is already active
+    if (displayActiveTimer) {
+      toast({
+        title: 'Timer Already Active',
+        description: 'Please stop the current timer before starting a new one',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     try {
       // Optimistically set task detail so UI shows correct title immediately
@@ -192,10 +252,10 @@ export default function TimeTrackerWidget() {
   };
 
   const handleStopTimer = async () => {
-    if (!activeTimer) return;
+    if (!displayActiveTimer) return;
 
     try {
-      await stopTimer(activeTimer.id);
+      await stopTimer(displayActiveTimer.id);
       setActiveTaskDetail(null);
       toast({
         title: 'Timer Stopped',
@@ -218,9 +278,14 @@ export default function TimeTrackerWidget() {
 
   const availableTasks = tasks
     .filter(t => t.status !== 'COMPLETED')
+    // Filter out the currently active task - don't show it in the selection list
+    .filter(t => !activeTimerTaskId || t.id !== activeTimerTaskId)
     .filter(t => {
       if (!showMyTasksOnly) return true;
-      if (!user?.id) return true;
+      // While auth is resolving, don't filter tasks down to avoid empty fallback state
+      if (isAuthLoading) return true;
+      // If auth finished and no user, suppress results when filtering "my tasks"
+      if (!user?.id) return false;
       return t.assignedTo === user.id;
     })
     .filter(t => {
@@ -243,7 +308,7 @@ export default function TimeTrackerWidget() {
       <div className="fixed bottom-4 right-4 z-50">
         <Card className="w-64 shadow-lg border-2">
           <CardContent className="p-3">
-            {activeTimer ? (
+            {displayActiveTimer ? (
               <div className="flex items-center justify-between">
                 <div className="flex-1 min-w-0">
                   <div className="text-xs text-muted-foreground truncate">{getTaskName()}</div>
@@ -323,7 +388,7 @@ export default function TimeTrackerWidget() {
           </div>
 
           {/* Active Timer - Only show when timer is running */}
-          {activeTimer ? (
+          {displayActiveTimer ? (
             <div className="mb-6 p-4 bg-green-50 border-2 border-green-200 rounded-lg">
               <div className="flex items-center justify-between mb-2">
                 <Badge variant="outline" className="bg-green-100 text-green-800">
@@ -331,12 +396,9 @@ export default function TimeTrackerWidget() {
                   Running
                 </Badge>
                 <span className="text-xs text-muted-foreground">
-                  {(() => {
-                    const d = activeTimer.startTime ? new Date(activeTimer.startTime as unknown as string) : null;
-                    return d && !isNaN(d.getTime())
-                      ? `Started ${formatDistanceToNow(d, { addSuffix: true })}`
-                      : 'Started just now';
-                  })()}
+                  {activeTimerStartTimestamp
+                    ? `Started ${formatDistanceToNow(new Date(activeTimerStartTimestamp), { addSuffix: true })}`
+                    : 'Started just now'}
                 </span>
               </div>
               <h3 className="font-semibold text-lg mb-2 truncate">{getTaskName()}</h3>

@@ -1,7 +1,7 @@
 {
   "name": "nexuspm-backend",
   "version": "1.0.0",
-  "description": "NestJS backend for NexusPM - migrated from Supabase",
+  "description": "NestJS backend for NexusPM",
   "author": "",
   "private": true,
   "license": "MIT",
@@ -21,7 +21,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
-    "prisma:seed": "ts-node prisma/seed.ts"
+    "prisma:seed": "ts-node prisma/seed.ts",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.490.0",
