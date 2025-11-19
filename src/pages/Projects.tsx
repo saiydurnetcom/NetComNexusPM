@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import AppLayout from '@/components/AppLayout';
 import { useToast } from '@/components/ui/use-toast';
 import { useProjects } from '@/hooks/useProjects';
@@ -13,8 +13,14 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tag } from '@/types';
 import { TagSelector } from '@/components/TagSelector';
+import { apiClient } from '@/lib/api-client';
+import { adminService } from '@/lib/admin-service';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function Projects() {
+  const { user } = useAuth();
+  const userRole = user?.role?.toLowerCase();
+  const canCreateTags = userRole === 'admin' || userRole === 'manager';
   const navigate = useNavigate();
   const { projects, fetchProjects, createProject, isLoading, error } = useProjects();
   const { toast } = useToast();
@@ -30,6 +36,13 @@ export default function Projects() {
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
   const [projectTags, setProjectTags] = useState<Record<string, Tag[]>>({});
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isTagDialogOpen, setIsTagDialogOpen] = useState(false);
+  const [tagForm, setTagForm] = useState({
+    name: '',
+    color: '#3b82f6',
+    category: '',
+    description: '',
+  });
 
   useEffect(() => {
     loadData();
@@ -43,56 +56,32 @@ export default function Projects() {
 
   const loadTags = async () => {
     try {
-      const { supabase } = await import('@/lib/supabase');
-      const { data, error } = await supabase
-        .from('tags')
-        .select('*')
-        .order('name');
-      if (error) throw error;
-      setAvailableTags(data || []);
+      const tags = await apiClient.getTags();
+      setAvailableTags(tags);
     } catch (error) {
       console.error('Error loading tags:', error);
+      setAvailableTags([]);
     }
   };
 
   const loadProjectTags = async () => {
     try {
-      const { supabase } = await import('@/lib/supabase');
-      // Try camelCase first, fallback to snake_case
-      let { data, error } = await supabase
-        .from('project_tags')
-        .select('projectId, tagId, tags(*)');
-      
-      if (error) {
-        // If camelCase fails, try snake_case
-        if (error.code === '42703' || error.message?.includes('projectId') || error.message?.includes('projectid')) {
-          const result = await supabase
-            .from('project_tags')
-            .select('projectid, tagid, tags(*)');
-          
-          if (result.error) {
-            console.error('Error loading project tags:', result.error);
-            setProjectTags({});
-            return;
+      // Load tags for all projects
+      const tagMap: Record<string, Tag[]> = {};
+
+      await Promise.all(
+        projects.map(async (project) => {
+          try {
+            const projectTags = await apiClient.getProjectTags(project.id);
+            tagMap[project.id] = projectTags.map((pt: any) => pt.tag);
+          } catch (error) {
+            console.error(`Error loading tags for project ${project.id}:`, error);
+            tagMap[project.id] = [];
           }
-          
-          data = result.data;
-        } else {
-          throw error;
-        }
-      }
-      
-      const tagsByProject: Record<string, Tag[]> = {};
-      (data || []).forEach((pt: any) => {
-        const projectId = pt.projectId || pt.projectid;
-        if (!tagsByProject[projectId]) {
-          tagsByProject[projectId] = [];
-        }
-        if (pt.tags) {
-          tagsByProject[projectId].push(pt.tags);
-        }
-      });
-      setProjectTags(tagsByProject);
+        })
+      );
+
+      setProjectTags(tagMap);
     } catch (error) {
       console.error('Error loading project tags:', error);
       setProjectTags({});
@@ -116,38 +105,18 @@ export default function Projects() {
 
       // Add purpose if provided
       if (newProject.purpose) {
-        const { supabase } = await import('@/lib/supabase');
-        await supabase
-          .from('projects')
-          .update({ purpose: newProject.purpose })
-          .eq('id', project.id);
+        await apiClient.updateProject(project.id, { purpose: newProject.purpose });
       }
 
-      // Add tags to project
+      // Add tags to project using API
       if (newProject.selectedTags.length > 0) {
-        const { supabase } = await import('@/lib/supabase');
-        // Try camelCase first, fallback to snake_case
-        let tagInserts = newProject.selectedTags.map(tagId => ({
-          projectId: project.id,
-          tagId,
-        }));
-        let { error: tagError } = await supabase.from('project_tags').insert(tagInserts);
-        
-        if (tagError && (tagError.code === '42703' || tagError.message?.includes('projectId') || tagError.message?.includes('projectid'))) {
-          // Try snake_case
-          tagInserts = newProject.selectedTags.map(tagId => ({
-            projectid: project.id,
-            tagid: tagId,
-          }));
-          const result = await supabase.from('project_tags').insert(tagInserts);
-          tagError = result.error;
+        try {
+          await apiClient.updateProjectTags(project.id, newProject.selectedTags);
+        } catch (error) {
+          console.error('Error updating project tags:', error);
         }
-        
-        if (tagError && !tagError.message?.includes('does not exist')) {
-          console.error('Error inserting project tags:', tagError);
-        }
-        await loadProjectTags();
       }
+      await loadProjectTags();
 
       setNewProject({
         name: '',
@@ -167,7 +136,7 @@ export default function Projects() {
     } catch (error) {
       console.error('Failed to create project:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to create project';
-      
+
       // Check if it's a database error
       let userMessage = errorMessage;
       if (errorMessage.includes('relation') || errorMessage.includes('does not exist')) {
@@ -175,7 +144,7 @@ export default function Projects() {
       } else if (errorMessage.includes('permission denied') || errorMessage.includes('RLS')) {
         userMessage = 'Permission denied. Please check your Row Level Security policies in Supabase.';
       }
-      
+
       toast({
         title: 'Error',
         description: userMessage,
@@ -253,11 +222,47 @@ export default function Projects() {
                     required
                   />
                 </div>
-                <TagSelector
-                  tags={availableTags}
-                  selectedTags={newProject.selectedTags}
-                  onSelectionChange={(tagIds) => setNewProject({ ...newProject, selectedTags: tagIds })}
-                />
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Tags</Label>
+                    {canCreateTags && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setIsTagDialogOpen(true)}
+                        className="text-xs"
+                      >
+                        <TagIcon className="h-3 w-3 mr-1" />
+                        Create Tag
+                      </Button>
+                    )}
+                  </div>
+                  {availableTags.length === 0 ? (
+                    <div className="text-sm text-muted-foreground p-3 border rounded-md bg-gray-50">
+                      {canCreateTags ? (
+                        <>
+                          No tags available.{' '}
+                          <button
+                            type="button"
+                            onClick={() => setIsTagDialogOpen(true)}
+                            className="text-blue-600 hover:underline"
+                          >
+                            Create your first tag
+                          </button>
+                        </>
+                      ) : (
+                        <>No tags available. Contact an admin or manager to create tags.</>
+                      )}
+                    </div>
+                  ) : (
+                    <TagSelector
+                      tags={availableTags}
+                      selectedTags={newProject.selectedTags}
+                      onSelectionChange={(tagIds) => setNewProject({ ...newProject, selectedTags: tagIds })}
+                    />
+                  )}
+                </div>
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? 'Creating...' : 'Create Project'}
                 </Button>
@@ -303,13 +308,12 @@ export default function Projects() {
               const daysUntilDeadline = Math.ceil((endDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
               const isApproachingDeadline = daysUntilDeadline <= 7 && daysUntilDeadline > 0;
               const currentProjectTags = projectTags[project.id] || [];
-              
+
               return (
-                <Card 
-                  key={project.id} 
-                  className={`hover:shadow-lg transition-all cursor-pointer border-0 shadow-sm ${
-                    isApproachingDeadline ? 'border-orange-200 bg-orange-50/30' : ''
-                  }`}
+                <Card
+                  key={project.id}
+                  className={`hover:shadow-lg transition-all cursor-pointer border-0 shadow-sm ${isApproachingDeadline ? 'border-orange-200 bg-orange-50/30' : ''
+                    }`}
                   onClick={() => navigate(`/projects/${project.id}`)}
                 >
                   <CardHeader>
@@ -363,6 +367,106 @@ export default function Projects() {
           </div>
         )}
       </div>
+
+      {/* Create Tag Dialog - visible only to admin/manager */}
+      {canCreateTags && (
+        <Dialog open={isTagDialogOpen} onOpenChange={setIsTagDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create Tag</DialogTitle>
+              <DialogDescription>
+                Create a new tag for categorizing projects and tasks
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="tag-name">Name *</Label>
+                <Input
+                  id="tag-name"
+                  value={tagForm.name}
+                  onChange={(e) => setTagForm({ ...tagForm, name: e.target.value })}
+                  placeholder="e.g., Operations, Vendor Management"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="tag-color">Color</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="tag-color"
+                    type="color"
+                    value={tagForm.color}
+                    onChange={(e) => setTagForm({ ...tagForm, color: e.target.value })}
+                    className="w-20 h-10"
+                  />
+                  <Input
+                    type="text"
+                    value={tagForm.color}
+                    onChange={(e) => setTagForm({ ...tagForm, color: e.target.value })}
+                    placeholder="#3b82f6"
+                    className="flex-1"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="tag-category">Category</Label>
+                <Input
+                  id="tag-category"
+                  value={tagForm.category}
+                  onChange={(e) => setTagForm({ ...tagForm, category: e.target.value })}
+                  placeholder="e.g., operations, vendor, internal"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="tag-description">Description</Label>
+                <Textarea
+                  id="tag-description"
+                  value={tagForm.description}
+                  onChange={(e) => setTagForm({ ...tagForm, description: e.target.value })}
+                  placeholder="Optional description for this tag"
+                  rows={3}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => {
+                setIsTagDialogOpen(false);
+                setTagForm({ name: '', color: '#3b82f6', category: '', description: '' });
+              }}>
+                Cancel
+              </Button>
+              <Button onClick={async () => {
+                if (!tagForm.name.trim()) {
+                  toast({
+                    title: 'Error',
+                    description: 'Tag name is required',
+                    variant: 'destructive',
+                  });
+                  return;
+                }
+
+                try {
+                  await adminService.createTag(tagForm);
+                  await loadTags();
+                  setIsTagDialogOpen(false);
+                  setTagForm({ name: '', color: '#3b82f6', category: '', description: '' });
+                  toast({
+                    title: 'Success',
+                    description: 'Tag created successfully',
+                  });
+                } catch (error) {
+                  toast({
+                    title: 'Error',
+                    description: error instanceof Error ? error.message : 'Failed to create tag',
+                    variant: 'destructive',
+                  });
+                }
+              }}>
+                Create Tag
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </AppLayout>
   );
 }

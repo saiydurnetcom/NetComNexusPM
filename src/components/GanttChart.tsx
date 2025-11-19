@@ -132,13 +132,13 @@ export function GanttChart({ tasks, milestones = [], startDate, endDate, onTaskU
 
   const getStatusColor = (status: Task['status']) => {
     switch (status) {
-      case 'completed':
+      case 'COMPLETED':
         return 'bg-green-500';
-      case 'in_progress':
+      case 'IN_PROGRESS':
         return 'bg-blue-500';
-      case 'review':
+      case 'REVIEW':
         return 'bg-yellow-500';
-      case 'blocked':
+      case 'BLOCKED':
         return 'bg-red-500';
       default:
         return 'bg-gray-400';
@@ -147,11 +147,11 @@ export function GanttChart({ tasks, milestones = [], startDate, endDate, onTaskU
 
   const getPriorityColor = (priority: Task['priority']) => {
     switch (priority) {
-      case 'urgent':
+      case 'URGENT':
         return 'border-red-600';
-      case 'high':
+      case 'HIGH':
         return 'border-orange-500';
-      case 'medium':
+      case 'MEDIUM':
         return 'border-yellow-500';
       default:
         return 'border-gray-300';

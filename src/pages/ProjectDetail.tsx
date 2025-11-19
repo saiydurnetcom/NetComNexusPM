@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,17 +20,18 @@ import { useAuth } from '@/hooks/useAuth';
 import { useTimeTracking } from '@/hooks/useTimeTracking';
 import { useToast } from '@/components/ui/use-toast';
 import { usersService } from '@/lib/users-service';
+import { apiClient } from '@/lib/api-client';
 import { adminService } from '@/lib/admin-service';
 import { Task, Project, User, Tag, ProjectRisk, ProjectBudgetItem, ProjectMilestone } from '@/types';
 import { TagSelector } from '@/components/TagSelector';
 import { GanttChart } from '@/components/GanttChart';
 import { KanbanBoard } from '@/components/KanbanBoard';
 import { projectRisksService, projectBudgetService, projectMilestonesService } from '@/lib/project-features-service';
-import { 
-  Play, 
-  Clock, 
-  Calendar, 
-  User as UserIcon, 
+import {
+  Play,
+  Clock,
+  Calendar,
+  User as UserIcon,
   FolderKanban,
   Plus,
   Edit,
@@ -68,7 +70,7 @@ export default function ProjectDetail() {
   const [availableUsers, setAvailableUsers] = useState<User[]>([]);
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
   const [projectTags, setProjectTags] = useState<Tag[]>([]);
-  
+
   // Project editing
   const [isEditingProject, setIsEditingProject] = useState(false);
   const [projectForm, setProjectForm] = useState({
@@ -77,7 +79,8 @@ export default function ProjectDetail() {
     purpose: '',
     startDate: '',
     endDate: '',
-    status: 'active' as Project['status'],
+    status: 'ACTIVE' as Project['status'],
+    selectedTags: [] as string[],
   });
 
   // Task creation
@@ -85,11 +88,12 @@ export default function ProjectDetail() {
   const [taskForm, setTaskForm] = useState({
     title: '',
     description: '',
-    priority: 'medium' as Task['priority'],
+    priority: 'MEDIUM' as Task['priority'],
     assignedTo: '',
     dueDate: '',
     estimatedHours: 1,
     selectedTags: [] as string[],
+    dependsOnTaskId: '',
   });
 
   // Filters
@@ -105,7 +109,7 @@ export default function ProjectDetail() {
   const [isMemberDialogOpen, setIsMemberDialogOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState('');
   const [memberRole, setMemberRole] = useState<'owner' | 'member' | 'viewer'>('member');
-  
+
   // AI Report generation
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [cxoReport, setCxoReport] = useState<string | null>(null);
@@ -121,7 +125,7 @@ export default function ProjectDetail() {
   const [editingRisk, setEditingRisk] = useState<ProjectRisk | null>(null);
   const [editingBudgetItem, setEditingBudgetItem] = useState<ProjectBudgetItem | null>(null);
   const [editingMilestone, setEditingMilestone] = useState<ProjectMilestone | null>(null);
-  
+
   const [riskForm, setRiskForm] = useState({
     title: '',
     description: '',
@@ -215,20 +219,8 @@ export default function ProjectDetail() {
 
   const loadTags = async () => {
     try {
-      const { supabase } = await import('@/lib/supabase');
-      const { data, error } = await supabase
-        .from('tags')
-        .select('*')
-        .order('name');
-      if (error) {
-        // If table doesn't exist, just set empty array
-        if (error.code === '42P01' || error.code === 'PGRST202' || error.message?.includes('does not exist')) {
-          setAvailableTags([]);
-          return;
-        }
-        throw error;
-      }
-      setAvailableTags(data || []);
+      const tags = await apiClient.getTags();
+      setAvailableTags(tags);
     } catch (error) {
       console.error('Error loading tags:', error);
       setAvailableTags([]);
@@ -313,42 +305,8 @@ export default function ProjectDetail() {
   const loadProjectTags = async () => {
     if (!id) return;
     try {
-      const { supabase } = await import('@/lib/supabase');
-      // Try camelCase first, fallback to snake_case
-      let { data, error } = await supabase
-        .from('project_tags')
-        .select('tagId, tags(*)')
-        .eq('projectId', id);
-      
-      if (error) {
-        // If camelCase fails, try snake_case
-        if (error.code === '42703' || error.message?.includes('projectId') || error.message?.includes('projectid')) {
-          const result = await supabase
-            .from('project_tags')
-            .select('tagid, tags(*)')
-            .eq('projectid', id);
-          
-          if (result.error) {
-            // If table doesn't exist, just set empty array
-            if (result.error.code === '42P01' || result.error.code === 'PGRST202' || result.error.message?.includes('does not exist')) {
-              setProjectTags([]);
-              return;
-            }
-            console.error('Error loading project tags:', result.error);
-            setProjectTags([]);
-            return;
-          }
-          
-          data = result.data;
-        } else if (error.code === '42P01' || error.code === 'PGRST202' || error.message?.includes('does not exist')) {
-          setProjectTags([]);
-          return;
-        } else {
-          throw error;
-        }
-      }
-      
-      setProjectTags((data || []).map((pt: any) => pt.tags).filter(Boolean));
+      const projectTags = await apiClient.getProjectTags(id);
+      setProjectTags(projectTags.map((pt: any) => pt.tag).filter(Boolean));
     } catch (error) {
       console.error('Error loading project tags:', error);
       setProjectTags([]);
@@ -367,10 +325,11 @@ export default function ProjectDetail() {
           startDate: project.startDate ? new Date(project.startDate).toISOString().split('T')[0] : '',
           endDate: project.endDate ? new Date(project.endDate).toISOString().split('T')[0] : '',
           status: project.status,
+          selectedTags: projectTags.map(tag => tag.id),
         });
       }
     }
-  }, [id, projects]);
+  }, [id, projects, projectTags]);
 
   useEffect(() => {
     if (id && tasks.length > 0) {
@@ -390,6 +349,17 @@ export default function ProjectDetail() {
         status: projectForm.status,
         purpose: projectForm.purpose,
       });
+
+      // Update project tags
+      if (projectForm.selectedTags) {
+        try {
+          await apiClient.updateProjectTags(id, projectForm.selectedTags);
+        } catch (error) {
+          console.error('Error updating project tags:', error);
+        }
+      }
+
+      await loadProjectTags();
       setIsEditingProject(false);
       await fetchProjects();
       toast({
@@ -423,7 +393,7 @@ export default function ProjectDetail() {
       // Create dependency if specified
       if (taskForm.dependsOnTaskId) {
         try {
-          const { taskDependenciesService } = await import('@/lib/supabase-data');
+          const { taskDependenciesService } = await import('@/lib/api-data');
           await taskDependenciesService.createDependency({
             taskId: task.id,
             dependsOnTaskId: taskForm.dependsOnTaskId,
@@ -434,35 +404,19 @@ export default function ProjectDetail() {
         }
       }
 
-      // Add tags to task
+      // Add tags to task using API
       if (taskForm.selectedTags.length > 0) {
-        const { supabase } = await import('@/lib/supabase');
-        // Try camelCase first, fallback to snake_case
-        let tagInserts = taskForm.selectedTags.map(tagId => ({
-          taskId: task.id,
-          tagId,
-        }));
-        let { error: tagError } = await supabase.from('task_tags').insert(tagInserts);
-        
-        if (tagError && (tagError.code === '42703' || tagError.message?.includes('taskId') || tagError.message?.includes('taskid'))) {
-          // Try snake_case
-          tagInserts = taskForm.selectedTags.map(tagId => ({
-            taskid: task.id,
-            tagid: tagId,
-          }));
-          const result = await supabase.from('task_tags').insert(tagInserts);
-          tagError = result.error;
-        }
-        
-        if (tagError && !tagError.message?.includes('does not exist')) {
-          console.error('Error inserting task tags:', tagError);
+        try {
+          await apiClient.updateTaskTags(task.id, taskForm.selectedTags);
+        } catch (error) {
+          console.error('Error updating task tags:', error);
         }
       }
 
       setTaskForm({
         title: '',
         description: '',
-        priority: 'medium',
+        priority: 'MEDIUM',
         assignedTo: '',
         dueDate: '',
         estimatedHours: 1,
@@ -516,7 +470,7 @@ export default function ProjectDetail() {
 
   const handleGenerateCXOReport = async () => {
     if (!id) return;
-    
+
     setIsGeneratingReport(true);
     try {
       const { generateCXOReport, saveReport } = await import('@/lib/reports-service');
@@ -530,7 +484,7 @@ export default function ProjectDetail() {
       });
       setCxoReport(report);
       setIsReportDialogOpen(true);
-      
+
       // Auto-save the report
       try {
         await saveReport(id, report, 'cxo', currentProject?.name);
@@ -572,7 +526,7 @@ export default function ProjectDetail() {
   };
 
   const getStatusIcon = (status: Task['status']) => {
-    switch (status) {
+    switch (status.toLowerCase()) {
       case 'completed':
         return <CheckCircle2 className="h-4 w-4 text-green-600" />;
       case 'in_progress':
@@ -587,7 +541,7 @@ export default function ProjectDetail() {
   };
 
   const getPriorityColor = (priority: Task['priority']) => {
-    switch (priority) {
+    switch (priority.toLowerCase()) {
       case 'urgent':
         return 'destructive';
       case 'high':
@@ -644,9 +598,9 @@ export default function ProjectDetail() {
 
   const projectStats = {
     totalTasks: projectTasks.length,
-    completedTasks: projectTasks.filter(t => t.status === 'completed').length,
-    inProgressTasks: projectTasks.filter(t => t.status === 'in_progress').length,
-    overdueTasks: projectTasks.filter(t => isOverdue(t.dueDate) && t.status !== 'completed').length,
+    completedTasks: projectTasks.filter(t => t.status === 'COMPLETED').length,
+    inProgressTasks: projectTasks.filter(t => t.status === 'IN_PROGRESS').length,
+    overdueTasks: projectTasks.filter(t => isOverdue(t.dueDate) && t.status !== 'COMPLETED').length,
   };
 
   return (
@@ -715,9 +669,9 @@ export default function ProjectDetail() {
 
         {/* Project Info Card */}
         <Card>
-        <CardHeader>
+          <CardHeader>
             <CardTitle>Project Information</CardTitle>
-        </CardHeader>
+          </CardHeader>
           <CardContent>
             <Tabs defaultValue="overview" className="w-full">
               <TabsList className="grid grid-cols-8 w-full">
@@ -745,12 +699,12 @@ export default function ProjectDetail() {
                   Gantt
                 </TabsTrigger>
               </TabsList>
-              
+
               <TabsContent value="overview" className="space-y-4 mt-4">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div>
                     <Label className="text-xs text-muted-foreground">Status</Label>
-                    <Badge variant={currentProject.status === 'active' ? 'default' : 'secondary'} className="mt-1">
+                    <Badge variant={currentProject.status.toLowerCase() === 'active' ? 'default' : 'secondary'} className="mt-1">
                       {currentProject.status}
                     </Badge>
                   </div>
@@ -769,7 +723,7 @@ export default function ProjectDetail() {
                   <div>
                     <Label className="text-xs text-muted-foreground">Progress</Label>
                     <p className="text-sm font-medium mt-1">
-                      {projectStats.totalTasks > 0 
+                      {projectStats.totalTasks > 0
                         ? Math.round((projectStats.completedTasks / projectStats.totalTasks) * 100)
                         : 0}%
                     </p>
@@ -849,10 +803,10 @@ export default function ProjectDetail() {
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    <SelectItem value="low">Low</SelectItem>
-                                    <SelectItem value="medium">Medium</SelectItem>
-                                    <SelectItem value="high">High</SelectItem>
-                                    <SelectItem value="urgent">Urgent</SelectItem>
+                                    <SelectItem value="LOW">Low</SelectItem>
+                                    <SelectItem value="MEDIUM">Medium</SelectItem>
+                                    <SelectItem value="HIGH">High</SelectItem>
+                                    <SelectItem value="URGENT">Urgent</SelectItem>
                                   </SelectContent>
                                 </Select>
                               </div>
@@ -900,14 +854,14 @@ export default function ProjectDetail() {
                             <div className="space-y-2">
                               <Label htmlFor="task-dependency">Depends On (Optional)</Label>
                               <Select
-                                value={taskForm.dependsOnTaskId || ''}
-                                onValueChange={(value) => setTaskForm({ ...taskForm, dependsOnTaskId: value || undefined })}
+                                value={taskForm.dependsOnTaskId ?? 'none'}
+                                onValueChange={(value) => setTaskForm({ ...taskForm, dependsOnTaskId: value === 'none' ? undefined : value })}
                               >
                                 <SelectTrigger>
                                   <SelectValue placeholder="Select a task this depends on" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="">None</SelectItem>
+                                  <SelectItem value="none">None</SelectItem>
                                   {projectTasks
                                     .filter(t => t.id !== taskForm.dependsOnTaskId)
                                     .map((t) => (
@@ -1076,14 +1030,14 @@ export default function ProjectDetail() {
                                 const assignedUser = availableUsers.find(u => u.id === task.assignedTo) || user;
                                 const taskTimeEntries = timeEntries.filter(entry => entry.taskId === task.id);
                                 const totalTime = taskTimeEntries.reduce((total, entry) => total + (entry.durationMinutes || 0), 0);
-                                const progressPercentage = task.estimatedHours > 0 
+                                const progressPercentage = task.estimatedHours > 0
                                   ? (totalTime / (task.estimatedHours * 60)) * 100
                                   : 0;
                                 const isTaskTimerActive = activeTimer?.taskId === task.id;
-                                
+
                                 return (
-                                  <TableRow 
-                                    key={task.id} 
+                                  <TableRow
+                                    key={task.id}
                                     className="cursor-pointer hover:bg-gray-50"
                                     onClick={() => navigate(`/tasks/${task.id}`)}
                                   >
@@ -1096,9 +1050,8 @@ export default function ProjectDetail() {
                                         onValueChange={(value: Task['status']) => {
                                           handleStatusChange(task.id, value);
                                         }}
-                                        onClick={(e) => e.stopPropagation()}
                                       >
-                                        <SelectTrigger className="w-28 h-8 text-xs">
+                                        <SelectTrigger className="w-28 h-8 text-xs" onClick={(e) => e.stopPropagation()}>
                                           <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -1182,19 +1135,18 @@ export default function ProjectDetail() {
                           const assignedUser = availableUsers.find(u => u.id === task.assignedTo) || user;
                           const taskTimeEntries = timeEntries.filter(entry => entry.taskId === task.id);
                           const totalTime = taskTimeEntries.reduce((total, entry) => total + (entry.durationMinutes || 0), 0);
-                          const progressPercentage = task.estimatedHours > 0 
+                          const progressPercentage = task.estimatedHours > 0
                             ? (totalTime / (task.estimatedHours * 60)) * 100
                             : 0;
                           const hasExceededEstimate = progressPercentage > 100;
                           const hasExceeded120Percent = progressPercentage > 120;
                           const isTaskTimerActive = activeTimer?.taskId === task.id;
-                          
+
                           return (
                             <Card
                               key={task.id}
-                              className={`hover:shadow-lg transition-all cursor-pointer ${
-                                isTaskOverdue && task.status !== 'completed' ? 'border-red-300 bg-red-50/50' : ''
-                              }`}
+                              className={`hover:shadow-lg transition-all cursor-pointer ${isTaskOverdue && task.status.toLowerCase() !== 'completed' ? 'border-red-300 bg-red-50/50' : ''
+                                }`}
                               onClick={() => navigate(`/tasks/${task.id}`)}
                             >
                               <CardHeader className="pb-3">
@@ -1214,9 +1166,8 @@ export default function ProjectDetail() {
                                       onValueChange={(value: Task['status']) => {
                                         handleStatusChange(task.id, value);
                                       }}
-                                      onClick={(e) => e.stopPropagation()}
                                     >
-                                      <SelectTrigger className="w-28 h-8 text-xs">
+                                      <SelectTrigger className="w-28 h-8 text-xs" onClick={(e) => e.stopPropagation()}>
                                         <SelectValue />
                                       </SelectTrigger>
                                       <SelectContent>
@@ -1247,7 +1198,7 @@ export default function ProjectDetail() {
                                     <span className={`text-xs ${isTaskOverdue ? 'text-red-600 font-semibold' : 'text-muted-foreground'}`}>
                                       {format(dueDate, 'MMM dd, yyyy')}
                                     </span>
-                                    {isTaskOverdue && task.status !== 'completed' && (
+                                    {isTaskOverdue && task.status.toLowerCase() !== 'completed' && (
                                       <Badge variant="destructive" className="text-xs ml-1">Overdue</Badge>
                                     )}
                                   </div>
@@ -1256,22 +1207,20 @@ export default function ProjectDetail() {
                                   <div className="space-y-1">
                                     <div className="flex items-center justify-between text-xs">
                                       <span className="text-muted-foreground">Progress</span>
-                                      <span className={`font-medium ${
-                                        hasExceeded120Percent ? 'text-red-600' :
+                                      <span className={`font-medium ${hasExceeded120Percent ? 'text-red-600' :
                                         hasExceededEstimate ? 'text-orange-600' :
-                                        ''
-                                      }`}>
+                                          ''
+                                        }`}>
                                         {Math.round(progressPercentage)}%
                                       </span>
                                     </div>
                                     <div className="w-full bg-gray-200 rounded-full h-2 relative overflow-hidden">
                                       <div
-                                        className={`h-2 rounded-full transition-all ${
-                                          hasExceeded120Percent ? 'bg-red-600' :
+                                        className={`h-2 rounded-full transition-all ${hasExceeded120Percent ? 'bg-red-600' :
                                           hasExceededEstimate ? 'bg-orange-500' :
-                                          progressPercentage >= 80 ? 'bg-yellow-500' :
-                                          'bg-blue-600'
-                                        }`}
+                                            progressPercentage >= 80 ? 'bg-yellow-500' :
+                                              'bg-blue-600'
+                                          }`}
                                         style={{ width: `${Math.min(100, progressPercentage)}%` }}
                                       />
                                     </div>
@@ -1358,22 +1307,22 @@ export default function ProjectDetail() {
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
+                      <div className="space-y-2">
                         <Label>Start Date</Label>
-            <Input
+                        <Input
                           type="date"
                           value={projectForm.startDate}
                           onChange={(e) => setProjectForm({ ...projectForm, startDate: e.target.value })}
-            />
-          </div>
-          <div className="space-y-2">
+                        />
+                      </div>
+                      <div className="space-y-2">
                         <Label>End Date</Label>
                         <Input
                           type="date"
                           value={projectForm.endDate}
                           onChange={(e) => setProjectForm({ ...projectForm, endDate: e.target.value })}
-            />
-          </div>
+                        />
+                      </div>
                     </div>
                     <div className="space-y-2">
                       <Label>Status</Label>
@@ -1385,12 +1334,17 @@ export default function ProjectDetail() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="active">Active</SelectItem>
-                          <SelectItem value="completed">Completed</SelectItem>
-                          <SelectItem value="archived">Archived</SelectItem>
+                          <SelectItem value="ACTIVE">Active</SelectItem>
+                          <SelectItem value="COMPLETED">Completed</SelectItem>
+                          <SelectItem value="ARCHIVED">Archived</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
+                    <TagSelector
+                      tags={availableTags}
+                      selectedTags={projectForm.selectedTags}
+                      onSelectionChange={(tagIds) => setProjectForm({ ...projectForm, selectedTags: tagIds })}
+                    />
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -1418,6 +1372,19 @@ export default function ProjectDetail() {
                         </p>
                       </div>
                     </div>
+                    {projectTags.length > 0 && (
+                      <div>
+                        <Label className="text-xs text-muted-foreground mb-2 block">Tags</Label>
+                        <div className="flex flex-wrap gap-2">
+                          {projectTags.map(tag => (
+                            <Badge key={tag.id} variant="outline" style={{ borderColor: tag.color, color: tag.color }}>
+                              <TagIcon className="h-3 w-3 mr-1" />
+                              {tag.name}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </TabsContent>
@@ -1622,7 +1589,7 @@ export default function ProjectDetail() {
                         <CardContent className="pt-6">
                           <div className="text-sm text-muted-foreground">Total Budgeted</div>
                           <div className="text-2xl font-bold">
-                            {budgetItems.reduce((sum, item) => sum + item.budgetedAmount, 0).toLocaleString('en-US', {
+                            {budgetItems.reduce((sum, item) => sum + Number(item.budgetedAmount || 0), 0).toLocaleString('en-US', {
                               style: 'currency',
                               currency: budgetItems[0]?.currency || 'USD',
                             })}
@@ -1633,7 +1600,7 @@ export default function ProjectDetail() {
                         <CardContent className="pt-6">
                           <div className="text-sm text-muted-foreground">Total Actual</div>
                           <div className="text-2xl font-bold">
-                            {budgetItems.reduce((sum, item) => sum + item.actualAmount, 0).toLocaleString('en-US', {
+                            {budgetItems.reduce((sum, item) => sum + Number(item.actualAmount || 0), 0).toLocaleString('en-US', {
                               style: 'currency',
                               currency: budgetItems[0]?.currency || 'USD',
                             })}
@@ -1644,7 +1611,7 @@ export default function ProjectDetail() {
                         <CardContent className="pt-6">
                           <div className="text-sm text-muted-foreground">Remaining</div>
                           <div className="text-2xl font-bold">
-                            {(budgetItems.reduce((sum, item) => sum + item.budgetedAmount, 0) - budgetItems.reduce((sum, item) => sum + item.actualAmount, 0)).toLocaleString('en-US', {
+                            {(budgetItems.reduce((sum, item) => sum + Number(item.budgetedAmount || 0), 0) - budgetItems.reduce((sum, item) => sum + Number(item.actualAmount || 0), 0)).toLocaleString('en-US', {
                               style: 'currency',
                               currency: budgetItems[0]?.currency || 'USD',
                             })}
@@ -1787,10 +1754,10 @@ export default function ProjectDetail() {
                               <CardTitle className="flex items-center gap-2">
                                 {milestone.name}
                                 <Badge variant={
-                                  milestone.status === 'completed' ? 'default' : 
-                                  milestone.status === 'overdue' ? 'destructive' : 
-                                  milestone.status === 'in_progress' ? 'default' : 
-                                  'secondary'
+                                  milestone.status === 'completed' ? 'default' :
+                                    milestone.status === 'overdue' ? 'destructive' :
+                                      milestone.status === 'in_progress' ? 'default' :
+                                        'secondary'
                                 }>
                                   {milestone.status === 'in_progress' ? 'In Progress' : milestone.status}
                                 </Badge>
@@ -1934,8 +1901,8 @@ export default function ProjectDetail() {
                 </div>
               </TabsContent>
             </Tabs>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
 
         {/* Project Members - Sheet/Drawer */}
         <Sheet open={isMembersSheetOpen} onOpenChange={setIsMembersSheetOpen}>
@@ -1954,7 +1921,7 @@ export default function ProjectDetail() {
             </SheetHeader>
             <div className="mt-6 space-y-4">
               {(user?.role === 'admin' || currentProject?.createdBy === user?.id) && (
-                <Button 
+                <Button
                   onClick={() => {
                     setIsMembersSheetOpen(false);
                     setIsMemberDialogOpen(true);
@@ -1970,10 +1937,10 @@ export default function ProjectDetail() {
                   <Users className="h-12 w-12 mx-auto mb-3 text-gray-300" />
                   <p className="text-sm">No members added yet</p>
                   {(user?.role === 'admin' || currentProject?.createdBy === user?.id) && (
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="mt-3" 
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-3"
                       onClick={() => {
                         setIsMembersSheetOpen(false);
                         setIsMemberDialogOpen(true);
@@ -2133,449 +2100,449 @@ export default function ProjectDetail() {
           </Card>
         </div>
 
-      {/* CXO Report Dialog */}
-      <Dialog open={isReportDialogOpen} onOpenChange={setIsReportDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>CXO-Level Project Report</DialogTitle>
-            <DialogDescription>
-              AI-generated executive summary for {currentProject?.name}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="mt-4">
-            {cxoReport ? (
-              <div className="prose max-w-none whitespace-pre-wrap text-sm">
-                {cxoReport}
-              </div>
-            ) : (
-              <p className="text-gray-500">Generating report...</p>
-            )}
-          </div>
-          <div className="flex justify-end gap-2 mt-4">
-            <Button
-              variant="outline"
-              onClick={() => {
-                if (cxoReport && id) {
-                  const blob = new Blob([cxoReport], { type: 'text/plain' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = `cxo-report-${id}-${format(new Date(), 'yyyy-MM-dd')}.txt`;
-                  a.click();
-                  URL.revokeObjectURL(url);
-                }
-              }}
-            >
-              <FileText className="h-4 w-4 mr-2" />
-              Download TXT
-            </Button>
-            <Button onClick={() => setIsReportDialogOpen(false)}>Close</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+        {/* CXO Report Dialog */}
+        <Dialog open={isReportDialogOpen} onOpenChange={setIsReportDialogOpen}>
+          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>CXO-Level Project Report</DialogTitle>
+              <DialogDescription>
+                AI-generated executive summary for {currentProject?.name}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="mt-4">
+              {cxoReport ? (
+                <div className="prose max-w-none whitespace-pre-wrap text-sm">
+                  {cxoReport}
+                </div>
+              ) : (
+                <p className="text-gray-500">Generating report...</p>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 mt-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (cxoReport && id) {
+                    const blob = new Blob([cxoReport], { type: 'text/plain' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `cxo-report-${id}-${format(new Date(), 'yyyy-MM-dd')}.txt`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }
+                }}
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                Download TXT
+              </Button>
+              <Button onClick={() => setIsReportDialogOpen(false)}>Close</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
-      {/* Risk Dialog */}
-      <Dialog open={isRiskDialogOpen} onOpenChange={setIsRiskDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{editingRisk ? 'Edit Risk' : 'Add Risk'}</DialogTitle>
-            <DialogDescription>
-              {editingRisk ? 'Update project risk details' : 'Identify and track a new project risk'}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="risk-title">Title *</Label>
-              <Input
-                id="risk-title"
-                value={riskForm.title}
-                onChange={(e) => setRiskForm({ ...riskForm, title: e.target.value })}
-                placeholder="Enter risk title"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="risk-description">Description</Label>
-              <Textarea
-                id="risk-description"
-                value={riskForm.description}
-                onChange={(e) => setRiskForm({ ...riskForm, description: e.target.value })}
-                placeholder="Describe the risk"
-                rows={3}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
+        {/* Risk Dialog */}
+        <Dialog open={isRiskDialogOpen} onOpenChange={setIsRiskDialogOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>{editingRisk ? 'Edit Risk' : 'Add Risk'}</DialogTitle>
+              <DialogDescription>
+                {editingRisk ? 'Update project risk details' : 'Identify and track a new project risk'}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="risk-category">Category</Label>
-                <Select
-                  value={riskForm.riskCategory}
-                  onValueChange={(value: ProjectRisk['riskCategory']) => setRiskForm({ ...riskForm, riskCategory: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="technical">Technical</SelectItem>
-                    <SelectItem value="schedule">Schedule</SelectItem>
-                    <SelectItem value="budget">Budget</SelectItem>
-                    <SelectItem value="resource">Resource</SelectItem>
-                    <SelectItem value="scope">Scope</SelectItem>
-                    <SelectItem value="quality">Quality</SelectItem>
-                    <SelectItem value="external">External</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="risk-status">Status</Label>
-                <Select
-                  value={riskForm.status}
-                  onValueChange={(value: ProjectRisk['status']) => setRiskForm({ ...riskForm, status: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="identified">Identified</SelectItem>
-                    <SelectItem value="monitoring">Monitoring</SelectItem>
-                    <SelectItem value="mitigated">Mitigated</SelectItem>
-                    <SelectItem value="closed">Closed</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="risk-probability">Probability</Label>
-                <Select
-                  value={riskForm.probability}
-                  onValueChange={(value: ProjectRisk['probability']) => setRiskForm({ ...riskForm, probability: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="critical">Critical</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="risk-impact">Impact</Label>
-                <Select
-                  value={riskForm.impact}
-                  onValueChange={(value: ProjectRisk['impact']) => setRiskForm({ ...riskForm, impact: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="critical">Critical</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="risk-mitigation">Mitigation Strategy</Label>
-              <Textarea
-                id="risk-mitigation"
-                value={riskForm.mitigationStrategy}
-                onChange={(e) => setRiskForm({ ...riskForm, mitigationStrategy: e.target.value })}
-                placeholder="Describe how to mitigate this risk"
-                rows={3}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="risk-owner">Mitigation Owner</Label>
-                <Select
-                  value={riskForm.mitigationOwner}
-                  onValueChange={(value) => setRiskForm({ ...riskForm, mitigationOwner: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select owner" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    {availableUsers.map((u) => (
-                      <SelectItem key={u.id} value={u.id}>
-                        {u.firstName} {u.lastName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="risk-target-date">Target Mitigation Date</Label>
+                <Label htmlFor="risk-title">Title *</Label>
                 <Input
-                  id="risk-target-date"
+                  id="risk-title"
+                  value={riskForm.title}
+                  onChange={(e) => setRiskForm({ ...riskForm, title: e.target.value })}
+                  placeholder="Enter risk title"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="risk-description">Description</Label>
+                <Textarea
+                  id="risk-description"
+                  value={riskForm.description}
+                  onChange={(e) => setRiskForm({ ...riskForm, description: e.target.value })}
+                  placeholder="Describe the risk"
+                  rows={3}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="risk-category">Category</Label>
+                  <Select
+                    value={riskForm.riskCategory}
+                    onValueChange={(value: ProjectRisk['riskCategory']) => setRiskForm({ ...riskForm, riskCategory: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="technical">Technical</SelectItem>
+                      <SelectItem value="schedule">Schedule</SelectItem>
+                      <SelectItem value="budget">Budget</SelectItem>
+                      <SelectItem value="resource">Resource</SelectItem>
+                      <SelectItem value="scope">Scope</SelectItem>
+                      <SelectItem value="quality">Quality</SelectItem>
+                      <SelectItem value="external">External</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="risk-status">Status</Label>
+                  <Select
+                    value={riskForm.status}
+                    onValueChange={(value: ProjectRisk['status']) => setRiskForm({ ...riskForm, status: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="identified">Identified</SelectItem>
+                      <SelectItem value="monitoring">Monitoring</SelectItem>
+                      <SelectItem value="mitigated">Mitigated</SelectItem>
+                      <SelectItem value="closed">Closed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="risk-probability">Probability</Label>
+                  <Select
+                    value={riskForm.probability}
+                    onValueChange={(value: ProjectRisk['probability']) => setRiskForm({ ...riskForm, probability: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="critical">Critical</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="risk-impact">Impact</Label>
+                  <Select
+                    value={riskForm.impact}
+                    onValueChange={(value: ProjectRisk['impact']) => setRiskForm({ ...riskForm, impact: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="critical">Critical</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="risk-mitigation">Mitigation Strategy</Label>
+                <Textarea
+                  id="risk-mitigation"
+                  value={riskForm.mitigationStrategy}
+                  onChange={(e) => setRiskForm({ ...riskForm, mitigationStrategy: e.target.value })}
+                  placeholder="Describe how to mitigate this risk"
+                  rows={3}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="risk-owner">Mitigation Owner</Label>
+                  <Select
+                    value={riskForm.mitigationOwner}
+                    onValueChange={(value) => setRiskForm({ ...riskForm, mitigationOwner: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select owner" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      {availableUsers.map((u) => (
+                        <SelectItem key={u.id} value={u.id}>
+                          {u.firstName} {u.lastName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="risk-target-date">Target Mitigation Date</Label>
+                  <Input
+                    id="risk-target-date"
+                    type="date"
+                    value={riskForm.targetMitigationDate}
+                    onChange={(e) => setRiskForm({ ...riskForm, targetMitigationDate: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => {
+                setIsRiskDialogOpen(false);
+                setEditingRisk(null);
+              }}>
+                Cancel
+              </Button>
+              <Button
+                onClick={async () => {
+                  if (!riskForm.title.trim() || !id) return;
+                  try {
+                    if (editingRisk) {
+                      await projectRisksService.updateRisk(editingRisk.id, riskForm);
+                      toast({ title: 'Success', description: 'Risk updated' });
+                    } else {
+                      await projectRisksService.createRisk({
+                        projectId: id,
+                        ...riskForm,
+                        mitigationOwnerId: riskForm.mitigationOwner && riskForm.mitigationOwner !== 'none' ? riskForm.mitigationOwner : undefined,
+                        targetMitigationDate: riskForm.targetMitigationDate || undefined,
+                      });
+                      toast({ title: 'Success', description: 'Risk added' });
+                    }
+                    await loadRisks();
+                    setIsRiskDialogOpen(false);
+                    setEditingRisk(null);
+                    setRiskForm({
+                      title: '',
+                      description: '',
+                      riskCategory: 'technical',
+                      probability: 'medium',
+                      impact: 'medium',
+                      status: 'identified',
+                      mitigationStrategy: '',
+                      mitigationOwner: 'none',
+                      targetMitigationDate: '',
+                    });
+                  } catch (error) {
+                    toast({
+                      title: 'Error',
+                      description: error instanceof Error ? error.message : 'Failed to save risk',
+                      variant: 'destructive',
+                    });
+                  }
+                }}
+                disabled={!riskForm.title.trim()}
+              >
+                {editingRisk ? 'Update' : 'Create'} Risk
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Budget Item Dialog */}
+        <Dialog open={isBudgetDialogOpen} onOpenChange={setIsBudgetDialogOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>{editingBudgetItem ? 'Edit Budget Item' : 'Add Budget Item'}</DialogTitle>
+              <DialogDescription>
+                {editingBudgetItem ? 'Update budget item details' : 'Add a new budget line item'}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="budget-category">Category *</Label>
+                <Input
+                  id="budget-category"
+                  value={budgetForm.category}
+                  onChange={(e) => setBudgetForm({ ...budgetForm, category: e.target.value })}
+                  placeholder="e.g., Development, Marketing, Infrastructure"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="budget-description">Description</Label>
+                <Textarea
+                  id="budget-description"
+                  value={budgetForm.description}
+                  onChange={(e) => setBudgetForm({ ...budgetForm, description: e.target.value })}
+                  placeholder="Describe this budget item"
+                  rows={3}
+                />
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="budget-amount">Budgeted Amount *</Label>
+                  <Input
+                    id="budget-amount"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={budgetForm.budgetedAmount}
+                    onChange={(e) => setBudgetForm({ ...budgetForm, budgetedAmount: parseFloat(e.target.value) || 0 })}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="budget-actual">Actual Amount</Label>
+                  <Input
+                    id="budget-actual"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={budgetForm.actualAmount}
+                    onChange={(e) => setBudgetForm({ ...budgetForm, actualAmount: parseFloat(e.target.value) || 0 })}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="budget-currency">Currency</Label>
+                  <Select
+                    value={budgetForm.currency}
+                    onValueChange={(value) => setBudgetForm({ ...budgetForm, currency: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="USD">USD ($)</SelectItem>
+                      <SelectItem value="EUR">EUR (€)</SelectItem>
+                      <SelectItem value="GBP">GBP (£)</SelectItem>
+                      <SelectItem value="BDT">BDT (৳)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => {
+                setIsBudgetDialogOpen(false);
+                setEditingBudgetItem(null);
+              }}>
+                Cancel
+              </Button>
+              <Button
+                onClick={async () => {
+                  if (!budgetForm.category.trim() || !id) return;
+                  try {
+                    if (editingBudgetItem) {
+                      await projectBudgetService.updateBudgetItem(editingBudgetItem.id, budgetForm);
+                      toast({ title: 'Success', description: 'Budget item updated' });
+                    } else {
+                      await projectBudgetService.createBudgetItem({
+                        projectId: id,
+                        ...budgetForm,
+                      });
+                      toast({ title: 'Success', description: 'Budget item added' });
+                    }
+                    await loadBudgetItems();
+                    setIsBudgetDialogOpen(false);
+                    setEditingBudgetItem(null);
+                    setBudgetForm({
+                      category: '',
+                      description: '',
+                      budgetedAmount: 0,
+                      actualAmount: 0,
+                      currency: 'USD',
+                    });
+                  } catch (error) {
+                    toast({
+                      title: 'Error',
+                      description: error instanceof Error ? error.message : 'Failed to save budget item',
+                      variant: 'destructive',
+                    });
+                  }
+                }}
+                disabled={!budgetForm.category.trim()}
+              >
+                {editingBudgetItem ? 'Update' : 'Create'} Budget Item
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Milestone Dialog */}
+        <Dialog open={isMilestoneDialogOpen} onOpenChange={setIsMilestoneDialogOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>{editingMilestone ? 'Edit Milestone' : 'Add Milestone'}</DialogTitle>
+              <DialogDescription>
+                {editingMilestone ? 'Update milestone details' : 'Add a new project milestone'}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="milestone-name">Name *</Label>
+                <Input
+                  id="milestone-name"
+                  value={milestoneForm.name}
+                  onChange={(e) => setMilestoneForm({ ...milestoneForm, name: e.target.value })}
+                  placeholder="e.g., Phase 1 Complete, Beta Release"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="milestone-description">Description</Label>
+                <Textarea
+                  id="milestone-description"
+                  value={milestoneForm.description}
+                  onChange={(e) => setMilestoneForm({ ...milestoneForm, description: e.target.value })}
+                  placeholder="Describe this milestone"
+                  rows={3}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="milestone-date">Target Date *</Label>
+                <Input
+                  id="milestone-date"
                   type="date"
-                  value={riskForm.targetMitigationDate}
-                  onChange={(e) => setRiskForm({ ...riskForm, targetMitigationDate: e.target.value })}
+                  value={milestoneForm.targetDate}
+                  onChange={(e) => setMilestoneForm({ ...milestoneForm, targetDate: e.target.value })}
                 />
               </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => {
-              setIsRiskDialogOpen(false);
-              setEditingRisk(null);
-            }}>
-              Cancel
-            </Button>
-            <Button
-              onClick={async () => {
-                if (!riskForm.title.trim() || !id) return;
-                try {
-                  if (editingRisk) {
-                    await projectRisksService.updateRisk(editingRisk.id, riskForm);
-                    toast({ title: 'Success', description: 'Risk updated' });
-                  } else {
-                    await projectRisksService.createRisk({
-                      projectId: id,
-                      ...riskForm,
-                      mitigationOwner: riskForm.mitigationOwner && riskForm.mitigationOwner !== 'none' ? riskForm.mitigationOwner : null,
-                      targetMitigationDate: riskForm.targetMitigationDate || null,
+            <DialogFooter>
+              <Button variant="outline" onClick={() => {
+                setIsMilestoneDialogOpen(false);
+                setEditingMilestone(null);
+              }}>
+                Cancel
+              </Button>
+              <Button
+                onClick={async () => {
+                  if (!milestoneForm.name.trim() || !milestoneForm.targetDate || !id) return;
+                  try {
+                    if (editingMilestone) {
+                      await projectMilestonesService.updateMilestone(editingMilestone.id, milestoneForm);
+                      toast({ title: 'Success', description: 'Milestone updated' });
+                    } else {
+                      await projectMilestonesService.createMilestone({
+                        projectId: id,
+                        ...milestoneForm,
+                      });
+                      toast({ title: 'Success', description: 'Milestone added' });
+                    }
+                    await loadMilestones();
+                    setIsMilestoneDialogOpen(false);
+                    setEditingMilestone(null);
+                    setMilestoneForm({
+                      name: '',
+                      description: '',
+                      targetDate: '',
                     });
-                    toast({ title: 'Success', description: 'Risk added' });
-                  }
-                  await loadRisks();
-                  setIsRiskDialogOpen(false);
-                  setEditingRisk(null);
-                  setRiskForm({
-                    title: '',
-                    description: '',
-                    riskCategory: 'technical',
-                    probability: 'medium',
-                    impact: 'medium',
-                    status: 'identified',
-                    mitigationStrategy: '',
-                    mitigationOwner: 'none',
-                    targetMitigationDate: '',
-                  });
-                } catch (error) {
-                  toast({
-                    title: 'Error',
-                    description: error instanceof Error ? error.message : 'Failed to save risk',
-                    variant: 'destructive',
-                  });
-                }
-              }}
-              disabled={!riskForm.title.trim()}
-            >
-              {editingRisk ? 'Update' : 'Create'} Risk
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Budget Item Dialog */}
-      <Dialog open={isBudgetDialogOpen} onOpenChange={setIsBudgetDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{editingBudgetItem ? 'Edit Budget Item' : 'Add Budget Item'}</DialogTitle>
-            <DialogDescription>
-              {editingBudgetItem ? 'Update budget item details' : 'Add a new budget line item'}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="budget-category">Category *</Label>
-              <Input
-                id="budget-category"
-                value={budgetForm.category}
-                onChange={(e) => setBudgetForm({ ...budgetForm, category: e.target.value })}
-                placeholder="e.g., Development, Marketing, Infrastructure"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="budget-description">Description</Label>
-              <Textarea
-                id="budget-description"
-                value={budgetForm.description}
-                onChange={(e) => setBudgetForm({ ...budgetForm, description: e.target.value })}
-                placeholder="Describe this budget item"
-                rows={3}
-              />
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="budget-amount">Budgeted Amount *</Label>
-                <Input
-                  id="budget-amount"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={budgetForm.budgetedAmount}
-                  onChange={(e) => setBudgetForm({ ...budgetForm, budgetedAmount: parseFloat(e.target.value) || 0 })}
-                  placeholder="0.00"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="budget-actual">Actual Amount</Label>
-                <Input
-                  id="budget-actual"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={budgetForm.actualAmount}
-                  onChange={(e) => setBudgetForm({ ...budgetForm, actualAmount: parseFloat(e.target.value) || 0 })}
-                  placeholder="0.00"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="budget-currency">Currency</Label>
-                <Select
-                  value={budgetForm.currency}
-                  onValueChange={(value) => setBudgetForm({ ...budgetForm, currency: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="USD">USD ($)</SelectItem>
-                    <SelectItem value="EUR">EUR (€)</SelectItem>
-                    <SelectItem value="GBP">GBP (£)</SelectItem>
-                    <SelectItem value="BDT">BDT (৳)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => {
-              setIsBudgetDialogOpen(false);
-              setEditingBudgetItem(null);
-            }}>
-              Cancel
-            </Button>
-            <Button
-              onClick={async () => {
-                if (!budgetForm.category.trim() || !id) return;
-                try {
-                  if (editingBudgetItem) {
-                    await projectBudgetService.updateBudgetItem(editingBudgetItem.id, budgetForm);
-                    toast({ title: 'Success', description: 'Budget item updated' });
-                  } else {
-                    await projectBudgetService.createBudgetItem({
-                      projectId: id,
-                      ...budgetForm,
+                  } catch (error) {
+                    toast({
+                      title: 'Error',
+                      description: error instanceof Error ? error.message : 'Failed to save milestone',
+                      variant: 'destructive',
                     });
-                    toast({ title: 'Success', description: 'Budget item added' });
                   }
-                  await loadBudgetItems();
-                  setIsBudgetDialogOpen(false);
-                  setEditingBudgetItem(null);
-                  setBudgetForm({
-                    category: '',
-                    description: '',
-                    budgetedAmount: 0,
-                    actualAmount: 0,
-                    currency: 'USD',
-                  });
-                } catch (error) {
-                  toast({
-                    title: 'Error',
-                    description: error instanceof Error ? error.message : 'Failed to save budget item',
-                    variant: 'destructive',
-                  });
-                }
-              }}
-              disabled={!budgetForm.category.trim()}
-            >
-              {editingBudgetItem ? 'Update' : 'Create'} Budget Item
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Milestone Dialog */}
-      <Dialog open={isMilestoneDialogOpen} onOpenChange={setIsMilestoneDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{editingMilestone ? 'Edit Milestone' : 'Add Milestone'}</DialogTitle>
-            <DialogDescription>
-              {editingMilestone ? 'Update milestone details' : 'Add a new project milestone'}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="milestone-name">Name *</Label>
-              <Input
-                id="milestone-name"
-                value={milestoneForm.name}
-                onChange={(e) => setMilestoneForm({ ...milestoneForm, name: e.target.value })}
-                placeholder="e.g., Phase 1 Complete, Beta Release"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="milestone-description">Description</Label>
-              <Textarea
-                id="milestone-description"
-                value={milestoneForm.description}
-                onChange={(e) => setMilestoneForm({ ...milestoneForm, description: e.target.value })}
-                placeholder="Describe this milestone"
-                rows={3}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="milestone-date">Target Date *</Label>
-              <Input
-                id="milestone-date"
-                type="date"
-                value={milestoneForm.targetDate}
-                onChange={(e) => setMilestoneForm({ ...milestoneForm, targetDate: e.target.value })}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => {
-              setIsMilestoneDialogOpen(false);
-              setEditingMilestone(null);
-            }}>
-              Cancel
-            </Button>
-            <Button
-              onClick={async () => {
-                if (!milestoneForm.name.trim() || !milestoneForm.targetDate || !id) return;
-                try {
-                  if (editingMilestone) {
-                    await projectMilestonesService.updateMilestone(editingMilestone.id, milestoneForm);
-                    toast({ title: 'Success', description: 'Milestone updated' });
-                  } else {
-                    await projectMilestonesService.createMilestone({
-                      projectId: id,
-                      ...milestoneForm,
-                    });
-                    toast({ title: 'Success', description: 'Milestone added' });
-                  }
-                  await loadMilestones();
-                  setIsMilestoneDialogOpen(false);
-                  setEditingMilestone(null);
-                  setMilestoneForm({
-                    name: '',
-                    description: '',
-                    targetDate: '',
-                  });
-                } catch (error) {
-                  toast({
-                    title: 'Error',
-                    description: error instanceof Error ? error.message : 'Failed to save milestone',
-                    variant: 'destructive',
-                  });
-                }
-              }}
-              disabled={!milestoneForm.name.trim() || !milestoneForm.targetDate}
-            >
-              {editingMilestone ? 'Update' : 'Create'} Milestone
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+                }}
+                disabled={!milestoneForm.name.trim() || !milestoneForm.targetDate}
+              >
+                {editingMilestone ? 'Update' : 'Create'} Milestone
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </AppLayout>
   );

@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { TimeEntry } from '../types';
-import { timeTrackingService } from '../lib/supabase-data';
+import { timeTrackingService } from '../lib/api-data';
 
 export const useTimeTracking = () => {
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);

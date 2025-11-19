@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { Task, TaskCreateData } from '../types';
-import { tasksService } from '../lib/supabase-data';
+import { tasksService } from '../lib/api-data';
 
 export const useTasks = () => {
   const [tasks, setTasks] = useState<Task[]>([]);

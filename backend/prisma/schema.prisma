@@ -1,0 +1,717 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  password     String
+  firstName    String   @map("firstName")
+  lastName     String   @map("lastName")
+  role         Role     @default(MEMBER)
+  isActive     Boolean  @default(true) @map("isActive")
+  teamId       String?  @map("teamId")
+  departmentId String?  @map("departmentId")
+  createdAt    DateTime @default(now()) @map("createdAt")
+  updatedAt    DateTime @updatedAt @map("updatedAt")
+
+  // Relations
+  team       Team?       @relation("TeamMembers", fields: [teamId], references: [id], onDelete: SetNull)
+  department Department? @relation("DepartmentMembers", fields: [departmentId], references: [id], onDelete: SetNull)
+
+  // Created projects
+  createdProjects Project[] @relation("ProjectCreator")
+
+  // Assigned tasks
+  assignedTasks Task[] @relation("TaskAssignee")
+
+  // Created tasks
+  createdTasks Task[] @relation("TaskCreator")
+
+  // Reviewed tasks
+  reviewedTasks Task[] @relation("TaskReviewer")
+
+  // Time entries
+  timeEntries TimeEntry[]
+
+  // Created meetings
+  createdMeetings Meeting[]
+
+  // Reviewed suggestions
+  reviewedSuggestions AISuggestion[]
+
+  // Comments
+  taskComments TaskComment[]
+
+  // Uploaded attachments
+  uploadedAttachments TaskAttachment[]
+
+  // Notifications
+  notifications Notification[]
+
+  // Notification preferences
+  notificationPreferences UserNotificationPreferences?
+
+  // Weekly hours
+  weeklyHours UserWeeklyHours[]
+
+  // Created tags
+  createdTags Tag[]
+
+  // Created departments
+  createdDepartments Department[] @relation("DepartmentCreator")
+
+  // Created teams
+  createdTeams Team[] @relation("TeamCreator")
+
+  // Team lead
+  ledTeams Team[] @relation("TeamLead")
+
+  // Project memberships
+  projectMemberships ProjectMember[]
+
+  // Created milestones
+  createdMilestones ProjectMilestone[]
+
+  // Created risks
+  createdRisks ProjectRisk[]
+
+  // Risk mitigation owner
+  ownedRisks ProjectRisk[] @relation("RiskMitigationOwner")
+
+  // Created budget items
+  createdBudgetItems ProjectBudgetItem[]
+
+  // Generated reports
+  generatedReports ProjectReport[]
+
+  // Created allowed domains
+  createdAllowedDomains AllowedDomain[]
+
+  // Updated settings
+  updatedSettings Setting[]
+
+  @@index([teamId])
+  @@index([departmentId])
+  @@index([role])
+  @@index([email])
+  @@map("users")
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  MEMBER
+}
+
+model Department {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdBy   String?  @map("createdBy")
+  createdAt   DateTime @default(now()) @map("createdAt")
+  updatedAt   DateTime @updatedAt @map("updatedAt")
+
+  // Relations
+  creator        User?            @relation("DepartmentCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  users          User[]           @relation("DepartmentMembers")
+  teams          Team[]
+  allowedDomains AllowedDomain[]
+  TaskVisibility TaskVisibility[]
+
+  @@map("departments")
+}
+
+model Team {
+  id           String   @id @default(uuid())
+  name         String   @unique
+  description  String?
+  departmentId String?  @map("departmentId")
+  teamLeadId   String?  @map("teamLeadId")
+  createdBy    String?  @map("createdBy")
+  createdAt    DateTime @default(now()) @map("createdAt")
+  updatedAt    DateTime @updatedAt @map("updatedAt")
+
+  // Relations
+  department     Department?      @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  teamLead       User?            @relation("TeamLead", fields: [teamLeadId], references: [id], onDelete: SetNull)
+  creator        User?            @relation("TeamCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  members        User[]           @relation("TeamMembers")
+  allowedDomains AllowedDomain[]
+  taskVisibility TaskVisibility[]
+
+  @@index([departmentId])
+  @@map("teams")
+}
+
+model Project {
+  id             String        @id @default(uuid())
+  name           String
+  description    String?
+  status         ProjectStatus @default(ACTIVE)
+  startDate      DateTime      @map("startDate")
+  endDate        DateTime      @map("endDate")
+  createdBy      String        @map("createdBy")
+  purpose        String?
+  resources      Json?         @default("[]")
+  budgetAmount   Decimal?      @map("budgetAmount") @db.Decimal(12, 2)
+  budgetCurrency String?       @default("USD") @map("budgetCurrency")
+  actualSpent    Decimal?      @default(0) @map("actualSpent") @db.Decimal(12, 2)
+  createdAt      DateTime      @default(now()) @map("createdAt")
+  updatedAt      DateTime      @updatedAt @map("updatedAt")
+
+  // Relations
+  creator       User                @relation("ProjectCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+  members       ProjectMember[]
+  tasks         Task[]
+  meetings      Meeting[]
+  milestones    ProjectMilestone[]
+  risks         ProjectRisk[]
+  budgetItems   ProjectBudgetItem[]
+  reports       ProjectReport[]
+  tags          ProjectTag[]
+  notifications Notification[]
+
+  @@index([createdBy])
+  @@index([status])
+  @@map("projects")
+}
+
+enum ProjectStatus {
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+model ProjectMember {
+  id        String            @id @default(uuid())
+  projectId String            @map("projectId")
+  userId    String            @map("userId")
+  role      ProjectMemberRole @default(MEMBER)
+  addedBy   String?           @map("addedBy")
+  createdAt DateTime          @default(now()) @map("createdAt")
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@index([userId])
+  @@map("project_members")
+}
+
+enum ProjectMemberRole {
+  OWNER
+  MEMBER
+  VIEWER
+}
+
+model ProjectMilestone {
+  id            String          @id @default(uuid())
+  projectId     String          @map("projectId")
+  name          String
+  description   String?
+  targetDate    DateTime        @map("targetDate")
+  completedDate DateTime?       @map("completedDate")
+  status        MilestoneStatus @default(PENDING)
+  createdBy     String          @map("createdBy")
+  createdAt     DateTime        @default(now()) @map("createdAt")
+  updatedAt     DateTime        @updatedAt @map("updatedAt")
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  creator User    @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([status])
+  @@map("project_milestones")
+}
+
+enum MilestoneStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  OVERDUE
+}
+
+model ProjectRisk {
+  id                   String       @id @default(uuid())
+  projectId            String       @map("projectId")
+  title                String
+  description          String?
+  riskCategory         RiskCategory @map("riskCategory")
+  probability          RiskLevel    @default(MEDIUM)
+  impact               RiskLevel    @default(MEDIUM)
+  riskScore            Int          @map("riskScore")
+  status               RiskStatus   @default(IDENTIFIED)
+  mitigationStrategy   String?      @map("mitigationStrategy")
+  mitigationOwnerId    String?      @map("mitigationOwner")
+  targetMitigationDate DateTime?    @map("targetMitigationDate")
+  actualMitigationDate DateTime?    @map("actualMitigationDate")
+  createdBy            String       @map("createdBy")
+  createdAt            DateTime     @default(now()) @map("createdAt")
+  updatedAt            DateTime     @updatedAt @map("updatedAt")
+
+  // Relations
+  project         Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  creator         User    @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+  mitigationOwner User?   @relation("RiskMitigationOwner", fields: [mitigationOwnerId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([status])
+  @@map("project_risks")
+}
+
+enum RiskCategory {
+  TECHNICAL
+  SCHEDULE
+  BUDGET
+  RESOURCE
+  SCOPE
+  QUALITY
+  EXTERNAL
+  OTHER
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum RiskStatus {
+  IDENTIFIED
+  MONITORING
+  MITIGATED
+  CLOSED
+}
+
+model ProjectBudgetItem {
+  id             String   @id @default(uuid())
+  projectId      String   @map("projectId")
+  category       String
+  description    String?
+  budgetedAmount Decimal  @map("budgetedAmount") @db.Decimal(12, 2)
+  actualAmount   Decimal? @default(0) @map("actualAmount") @db.Decimal(12, 2)
+  currency       String   @default("USD")
+  createdBy      String   @map("createdBy")
+  createdAt      DateTime @default(now()) @map("createdAt")
+  updatedAt      DateTime @updatedAt @map("updatedAt")
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  creator User    @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@map("project_budget_items")
+}
+
+model ProjectReport {
+  id          String     @id @default(uuid())
+  projectId   String     @map("projectId")
+  title       String
+  content     String     @db.Text
+  reportType  ReportType @default(CXO) @map("reportType")
+  generatedBy String     @map("generatedBy")
+  createdAt   DateTime   @default(now()) @map("createdAt")
+  updatedAt   DateTime   @updatedAt @map("updatedAt")
+
+  // Relations
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  generator User    @relation(fields: [generatedBy], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@map("project_reports")
+}
+
+enum ReportType {
+  CXO
+  SUMMARY
+  DETAILED
+}
+
+model Task {
+  id             String       @id @default(uuid())
+  projectId      String?      @map("projectId")
+  title          String
+  description    String?      @db.Text
+  status         TaskStatus   @default(TODO)
+  priority       TaskPriority @default(MEDIUM)
+  estimatedHours Decimal      @default(0) @map("estimatedHours") @db.Decimal(10, 2)
+  assignedTo     String       @map("assignedTo")
+  createdBy      String       @map("createdBy")
+  dueDate        DateTime     @map("dueDate")
+  meetingId      String?      @map("meetingId")
+  reviewerId     String?      @map("reviewerId")
+  parentTaskId   String?      @map("parentTaskId")
+  createdAt      DateTime     @default(now()) @map("createdAt")
+  updatedAt      DateTime     @updatedAt @map("updatedAt")
+
+  // Relations
+  project       Project?         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee      User             @relation("TaskAssignee", fields: [assignedTo], references: [id], onDelete: Cascade)
+  creator       User             @relation("TaskCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+  reviewer      User?            @relation("TaskReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  meeting       Meeting?         @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  parentTask    Task?            @relation("SubTasks", fields: [parentTaskId], references: [id], onDelete: Cascade)
+  subtasks      Task[]           @relation("SubTasks")
+  comments      TaskComment[]
+  dependencies  TaskDependency[] @relation("TaskDependencies")
+  dependents    TaskDependency[] @relation("TaskDependents")
+  attachments   TaskAttachment[]
+  visibility    TaskVisibility[]
+  timeEntries   TimeEntry[]
+  tags          TaskTag[]
+  notifications Notification[]
+
+  @@index([projectId])
+  @@index([assignedTo])
+  @@index([createdBy])
+  @@index([status])
+  @@index([parentTaskId])
+  @@index([meetingId])
+  @@index([reviewerId])
+  @@map("tasks")
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  REVIEW
+  BLOCKED
+  COMPLETED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model TaskComment {
+  id               String   @id @default(uuid())
+  taskId           String   @map("taskId")
+  userId           String   @map("userId")
+  content          String   @db.Text
+  mentionedUserIds String[] @default([]) @map("mentionedUserIds")
+  createdAt        DateTime @default(now()) @map("createdAt")
+  updatedAt        DateTime @updatedAt @map("updatedAt")
+
+  // Relations
+  task          Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notifications Notification[]
+
+  @@index([taskId])
+  @@index([userId])
+  @@map("task_comments")
+}
+
+model TaskDependency {
+  id              String         @id @default(uuid())
+  taskId          String         @map("taskId")
+  dependsOnTaskId String         @map("dependsOnTaskId")
+  dependencyType  DependencyType @default(FINISH_TO_START) @map("dependencyType")
+  createdAt       DateTime       @default(now()) @map("createdAt")
+
+  // Relations
+  task      Task @relation("TaskDependencies", fields: [taskId], references: [id], onDelete: Cascade)
+  dependsOn Task @relation("TaskDependents", fields: [dependsOnTaskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, dependsOnTaskId])
+  @@index([taskId])
+  @@index([dependsOnTaskId])
+  @@map("task_dependencies")
+}
+
+enum DependencyType {
+  FINISH_TO_START
+  START_TO_START
+  FINISH_TO_FINISH
+  START_TO_FINISH
+}
+
+model TaskAttachment {
+  id         String   @id @default(uuid())
+  taskId     String   @map("taskId")
+  fileName   String   @map("fileName")
+  fileUrl    String   @map("fileUrl")
+  fileSize   Int      @map("fileSize")
+  mimeType   String?  @map("mimeType")
+  uploadedBy String   @map("uploadedBy")
+  createdAt  DateTime @default(now()) @map("createdAt")
+
+  // Relations
+  task     Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  uploader User @relation(fields: [uploadedBy], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@map("task_attachments")
+}
+
+model TaskVisibility {
+  id             String         @id @default(uuid())
+  taskId         String         @map("taskId")
+  visibilityType VisibilityType @map("visibilityType")
+  teamId         String?        @map("teamId")
+  departmentId   String?        @map("departmentId")
+  createdAt      DateTime       @default(now()) @map("createdAt")
+
+  // Relations
+  task       Task        @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  team       Team?       @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, visibilityType, teamId, departmentId])
+  @@map("task_visibility")
+}
+
+enum VisibilityType {
+  MEMBERS
+  TEAM_MANAGERS
+  UPLINE_MANAGERS
+  ALL
+}
+
+model TimeEntry {
+  id              String    @id @default(uuid())
+  userId          String    @map("userId")
+  taskId          String    @map("taskId")
+  startTime       DateTime  @map("startTime")
+  endTime         DateTime? @map("endTime")
+  durationMinutes Int       @default(0) @map("durationMinutes")
+  description     String?   @db.Text
+  billable        Boolean   @default(false)
+  createdAt       DateTime  @default(now()) @map("createdAt")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([taskId])
+  @@index([startTime])
+  @@map("time_entries")
+}
+
+model Meeting {
+  id          String   @id @default(uuid())
+  projectId   String?  @map("projectId")
+  title       String
+  notes       String   @db.Text
+  meetingDate DateTime @map("meetingDate")
+  createdBy   String   @map("createdBy")
+  createdAt   DateTime @default(now()) @map("createdAt")
+
+  // Relations
+  project     Project?       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  creator     User           @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+  tasks       Task[]
+  suggestions AISuggestion[]
+
+  @@index([projectId])
+  @@index([createdBy])
+  @@map("meetings")
+}
+
+model AISuggestion {
+  id                   String           @id @default(uuid())
+  meetingId            String           @map("meetingId")
+  originalText         String           @map("originalText") @db.Text
+  suggestedTask        String           @map("suggestedTask")
+  suggestedDescription String?          @map("suggestedDescription") @db.Text
+  confidenceScore      Decimal          @map("confidenceScore") @db.Decimal(3, 2)
+  status               SuggestionStatus @default(PENDING)
+  reviewedBy           String?          @map("reviewedBy")
+  reviewedAt           DateTime?        @map("reviewedAt")
+  rejectionReason      String?          @map("rejectionReason") @db.Text
+  createdAt            DateTime         @default(now()) @map("createdAt")
+
+  // Relations
+  meeting  Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  reviewer User?   @relation(fields: [reviewedBy], references: [id], onDelete: SetNull)
+
+  @@index([meetingId])
+  @@index([status])
+  @@map("ai_suggestions")
+}
+
+enum SuggestionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Notification {
+  id               String           @id @default(uuid())
+  userId           String           @map("userId")
+  type             NotificationType
+  title            String
+  message          String           @db.Text
+  relatedTaskId    String?          @map("relatedTaskId")
+  relatedProjectId String?          @map("relatedProjectId")
+  relatedCommentId String?          @map("relatedCommentId")
+  read             Boolean          @default(false)
+  readAt           DateTime?        @map("readAt")
+  createdAt        DateTime         @default(now()) @map("createdAt")
+
+  // Relations
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task    Task?        @relation(fields: [relatedTaskId], references: [id], onDelete: Cascade)
+  project Project?     @relation(fields: [relatedProjectId], references: [id], onDelete: Cascade)
+  comment TaskComment? @relation(fields: [relatedCommentId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, read])
+  @@index([createdAt(sort: Desc)])
+  @@map("notifications")
+}
+
+enum NotificationType {
+  TASK_ASSIGNED
+  TASK_DUE
+  TASK_OVERDUE
+  COMMENT
+  MENTION
+  MILESTONE
+  DEPENDENCY_BLOCKED
+  TASK_STATUS_CHANGED
+  PROJECT_UPDATED
+}
+
+model UserNotificationPreferences {
+  id                 String   @id @default(uuid())
+  userId             String   @unique @map("userId")
+  emailNotifications Boolean  @default(true) @map("emailNotifications")
+  taskAssignments    Boolean  @default(true) @map("taskAssignments")
+  projectUpdates     Boolean  @default(true) @map("projectUpdates")
+  meetingReminders   Boolean  @default(true) @map("meetingReminders")
+  pushNotifications  Boolean  @default(false) @map("pushNotifications")
+  pushSubscription   Json?    @map("pushSubscription")
+  createdAt          DateTime @default(now()) @map("createdAt")
+  updatedAt          DateTime @updatedAt @map("updatedAt")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_notification_preferences")
+}
+
+model Tag {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  color       String   @default("#3b82f6")
+  category    String?
+  description String?
+  createdBy   String?  @map("createdBy")
+  createdAt   DateTime @default(now()) @map("createdAt")
+  updatedAt   DateTime @updatedAt @map("updatedAt")
+
+  // Relations
+  creator  User?        @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  projects ProjectTag[]
+  tasks    TaskTag[]
+
+  @@map("tags")
+}
+
+model ProjectTag {
+  projectId String   @map("projectId")
+  tagId     String   @map("tagId")
+  createdAt DateTime @default(now()) @map("createdAt")
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, tagId])
+  @@index([projectId])
+  @@index([tagId])
+  @@map("project_tags")
+}
+
+model TaskTag {
+  taskId    String   @map("taskId")
+  tagId     String   @map("tagId")
+  createdAt DateTime @default(now()) @map("createdAt")
+
+  // Relations
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, tagId])
+  @@index([taskId])
+  @@index([tagId])
+  @@map("task_tags")
+}
+
+model AllowedDomain {
+  id                     String   @id @default(uuid())
+  domain                 String   @unique
+  isActive               Boolean  @default(true) @map("isActive")
+  autoAssignTeamId       String?  @map("autoAssignTeamId")
+  autoAssignDepartmentId String?  @map("autoAssignDepartmentId")
+  createdBy              String?  @map("createdBy")
+  createdAt              DateTime @default(now()) @map("createdAt")
+  updatedAt              DateTime @updatedAt @map("updatedAt")
+
+  // Relations
+  team       Team?       @relation(fields: [autoAssignTeamId], references: [id], onDelete: SetNull)
+  department Department? @relation(fields: [autoAssignDepartmentId], references: [id], onDelete: SetNull)
+  creator    User?       @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@index([domain])
+  @@map("allowed_domains")
+}
+
+model Setting {
+  id                  String   @id @default(uuid())
+  aiApiKey            String?  @map("aiApiKey")
+  aiApiUrl            String?  @map("aiApiUrl")
+  aiModel             String   @default("deepseek-reasoner") @map("aiModel")
+  // Email settings
+  emailEnabled        Boolean  @default(false) @map("emailEnabled")
+  emailApiUrl         String?  @map("emailApiUrl")
+  emailApiKey         String?  @map("emailApiKey")
+  emailFrom           String?  @map("emailFrom")
+  emailProvider       String?  @map("emailProvider")
+  // Push settings
+  pushEnabled         Boolean  @default(false) @map("pushEnabled")
+  pushVapidPublicKey  String?  @map("pushVapidPublicKey")
+  pushVapidPrivateKey String?  @map("pushVapidPrivateKey")
+  updatedBy           String?  @map("updatedBy")
+  updatedAt           DateTime @updatedAt @map("updatedAt")
+
+  // Relations
+  updater User? @relation(fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  @@map("settings")
+}
+
+model UserWeeklyHours {
+  id             String   @id @default(uuid())
+  userId         String   @map("userId")
+  weekStartDate  DateTime @map("weekStartDate") @db.Date
+  availableHours Decimal  @default(40) @map("availableHours") @db.Decimal(5, 2)
+  createdAt      DateTime @default(now()) @map("createdAt")
+  updatedAt      DateTime @updatedAt @map("updatedAt")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, weekStartDate])
+  @@index([userId])
+  @@index([weekStartDate])
+  @@map("user_weekly_hours")
+}

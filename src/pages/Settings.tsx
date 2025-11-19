@@ -10,14 +10,14 @@ import { Separator } from '@/components/ui/separator';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/components/ui/use-toast';
-import { supabase } from '@/lib/supabase';
+import { apiClient } from '@/lib/api-client';
 import { notificationPreferencesService } from '@/lib/notification-preferences-service';
 import { pushNotificationService } from '@/lib/push-notification-service';
 import { RefreshCw } from 'lucide-react';
-import { 
-  User, 
-  Bell, 
-  Shield, 
+import {
+  User,
+  Bell,
+  Shield,
   Palette,
   Save
 } from 'lucide-react';
@@ -26,7 +26,7 @@ export default function Settings() {
   const { user, refreshUser } = useAuth();
   const { toast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
-  
+
   // Profile settings
   const [profile, setProfile] = useState({
     firstName: user?.firstName || '',
@@ -103,7 +103,7 @@ export default function Settings() {
         try {
           const permission = await pushNotificationService.requestPermission();
           setPushPermission(permission);
-          
+
           if (permission === 'granted') {
             const subscription = await pushNotificationService.subscribe();
             if (subscription) {
@@ -160,14 +160,10 @@ export default function Settings() {
 
     setIsSaving(true);
     try {
-      const { error } = await supabase.auth.updateUser({
-        data: {
-          firstName: profile.firstName,
-          lastName: profile.lastName,
-        },
+      await apiClient.updateProfile({
+        firstName: profile.firstName,
+        lastName: profile.lastName,
       });
-
-      if (error) throw error;
 
       await refreshUser();
       toast({
@@ -271,13 +267,7 @@ export default function Settings() {
                   </div>
                 ) : (
                   <>
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                      <p className="text-sm text-blue-800">
-                        <strong>Email Notifications:</strong> To enable email notifications, configure your email service API keys in environment variables (VITE_EMAIL_API_KEY, VITE_EMAIL_API_URL).
-                        <br />
-                        <strong>Push Notifications:</strong> Browser push notifications are available. Enable them below to receive notifications even when the app is closed.
-                      </p>
-                    </div>
+                    {/* Info panel removed per request; toggles below reflect user preferences dynamically */}
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
                         <Label htmlFor="email-notifications">Email Notifications</Label>
@@ -410,30 +400,23 @@ export default function Settings() {
                   <p className="text-xs text-muted-foreground">
                     Role changes must be made by an administrator in the Admin panel.
                   </p>
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     size="sm"
                     onClick={async () => {
                       try {
-                        // Try to get role directly from database using RPC
-                        const { data: roleData, error: rpcError } = await supabase.rpc('get_current_user_role');
-                        if (!rpcError && roleData) {
-                          // Update user role directly
-                          const { data: { session } } = await supabase.auth.getSession();
-                          if (session?.user) {
-                            const updatedUser = {
-                              ...user!,
-                              role: roleData as 'admin' | 'manager' | 'member',
-                            };
-                            // Force update the user state
-                            await refreshUser();
-                            toast({
-                              title: 'Success',
-                              description: `Role refreshed: ${roleData}. ${roleData === 'admin' ? 'You should now see the Admin link in navigation.' : ''}`,
-                            });
-                            // Force page reload to update navigation
-                            setTimeout(() => window.location.reload(), 1000);
-                          }
+                        // Try to get role directly from database using API
+                        const roleResponse = await apiClient.getCurrentUserRole();
+                        const roleData = roleResponse.role;
+                        if (roleData) {
+                          // Force update the user state
+                          await refreshUser();
+                          toast({
+                            title: 'Success',
+                            description: `Role refreshed: ${roleData}. ${roleData === 'admin' ? 'You should now see the Admin link in navigation.' : ''}`,
+                          });
+                          // Force page reload to update navigation
+                          setTimeout(() => window.location.reload(), 1000);
                         } else {
                           // Fallback to refreshUser
                           await refreshUser();

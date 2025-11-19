@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { AISuggestion, MeetingProcessData, TaskCreateData } from '../types';
-import { aiSuggestionsService } from '../lib/supabase-data';
+import { aiSuggestionsService } from '../lib/api-data';
 
 export const useAISuggestions = () => {
   const [suggestions, setSuggestions] = useState<AISuggestion[]>([]);

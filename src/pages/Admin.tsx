@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/components/ui/use-toast';
-import { supabase } from '@/lib/supabase';
+import { apiClient } from '@/lib/api-client';
 import { 
   Users, 
   Building2, 
@@ -93,9 +93,10 @@ export default function Admin() {
                   onClick={async () => {
                     setIsRefreshingRole(true);
                     try {
-                      // Try to get role directly from database using RPC
-                      const { data: roleData, error: rpcError } = await supabase.rpc('get_current_user_role');
-                      if (!rpcError && roleData) {
+                      // Try to get role directly from database using API
+                      const roleResponse = await apiClient.getCurrentUserRole();
+                      const roleData = roleResponse.role;
+                      if (roleData) {
                         await refreshUser();
                         toast({
                           title: 'Success',
@@ -1863,6 +1864,14 @@ function SettingsManagement() {
     aiModel: 'deepseek-reasoner',
     supabaseUrl: '',
     supabaseAnonKey: '',
+    emailEnabled: false as boolean,
+    emailProvider: 'resend' as 'resend' | 'sendgrid' | 'ses' | 'custom',
+    emailApiUrl: '',
+    emailApiKey: '',
+    emailFrom: '',
+    pushEnabled: false as boolean,
+    pushVapidPublicKey: '',
+    pushVapidPrivateKey: '',
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -1881,6 +1890,14 @@ function SettingsManagement() {
         aiModel: data.aiModel || 'deepseek-reasoner',
         supabaseUrl: data.supabaseUrl || '',
         supabaseAnonKey: data.supabaseAnonKey || '',
+        emailEnabled: !!data.emailEnabled,
+        emailProvider: (data.emailProvider as any) || 'resend',
+        emailApiUrl: data.emailApiUrl || '',
+        emailApiKey: data.emailApiKey || '',
+        emailFrom: data.emailFrom || '',
+        pushEnabled: !!data.pushEnabled,
+        pushVapidPublicKey: data.pushVapidPublicKey || '',
+        pushVapidPrivateKey: data.pushVapidPrivateKey || '',
       });
     } catch (error) {
       console.error('Error loading settings:', error);
@@ -1993,6 +2010,102 @@ function SettingsManagement() {
                   onChange={(e) => setSettings({ ...settings, supabaseAnonKey: e.target.value })}
                   placeholder="Enter your Supabase anon key"
                 />
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t pt-4">
+            <h3 className="text-lg font-semibold mb-4">Email Notifications</h3>
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <input
+                  id="emailEnabled"
+                  type="checkbox"
+                  checked={settings.emailEnabled}
+                  onChange={(e) => setSettings({ ...settings, emailEnabled: e.target.checked })}
+                />
+                <label htmlFor="emailEnabled" className="text-sm">Enable Email Notifications</label>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="emailProvider">Provider</Label>
+                <Select
+                  value={settings.emailProvider}
+                  onValueChange={(value) => setSettings({ ...settings, emailProvider: value as any })}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="resend">Resend</SelectItem>
+                    <SelectItem value="sendgrid">SendGrid</SelectItem>
+                    <SelectItem value="ses">AWS SES</SelectItem>
+                    <SelectItem value="custom">Custom</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="emailApiUrl">API URL</Label>
+                  <Input
+                    id="emailApiUrl"
+                    value={settings.emailApiUrl}
+                    onChange={(e) => setSettings({ ...settings, emailApiUrl: e.target.value })}
+                    placeholder="https://api.resend.com/emails"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="emailApiKey">API Key</Label>
+                  <Input
+                    id="emailApiKey"
+                    type="password"
+                    value={settings.emailApiKey}
+                    onChange={(e) => setSettings({ ...settings, emailApiKey: e.target.value })}
+                    placeholder="Provider API Key"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="emailFrom">From Email</Label>
+                <Input
+                  id="emailFrom"
+                  value={settings.emailFrom}
+                  onChange={(e) => setSettings({ ...settings, emailFrom: e.target.value })}
+                  placeholder="noreply@yourdomain.com"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t pt-4">
+            <h3 className="text-lg font-semibold mb-4">Push Notifications (Web Push)</h3>
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <input
+                  id="pushEnabled"
+                  type="checkbox"
+                  checked={settings.pushEnabled}
+                  onChange={(e) => setSettings({ ...settings, pushEnabled: e.target.checked })}
+                />
+                <label htmlFor="pushEnabled" className="text-sm">Enable Push Notifications</label>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="pushVapidPublicKey">VAPID Public Key</Label>
+                  <Input
+                    id="pushVapidPublicKey"
+                    value={settings.pushVapidPublicKey}
+                    onChange={(e) => setSettings({ ...settings, pushVapidPublicKey: e.target.value })}
+                    placeholder="Base64 URL-encoded public key"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="pushVapidPrivateKey">VAPID Private Key</Label>
+                  <Input
+                    id="pushVapidPrivateKey"
+                    type="password"
+                    value={settings.pushVapidPrivateKey}
+                    onChange={(e) => setSettings({ ...settings, pushVapidPrivateKey: e.target.value })}
+                    placeholder="Private key (kept server-side)"
+                  />
+                </div>
               </div>
             </div>
           </div>

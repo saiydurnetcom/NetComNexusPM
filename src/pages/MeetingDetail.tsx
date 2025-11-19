@@ -18,7 +18,7 @@ import { useAISuggestions } from '@/hooks/useAISuggestions';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/components/ui/use-toast';
 import { usersService } from '@/lib/users-service';
-import { supabase } from '@/lib/supabase';
+import { apiClient } from '@/lib/api-client';
 import { Meeting, AISuggestion, Task, TaskCreateData, User } from '@/types';
 import { 
   Calendar, 
@@ -109,63 +109,10 @@ export default function MeetingDetail() {
         const suggestionsData = await getMeetingSuggestions(id);
         setSuggestions(suggestionsData);
         
-        // Find tasks that were created from this meeting
-        // Try camelCase first (migrations use quoted identifiers)
-        let tasksResult = await supabase
-          .from('tasks')
-          .select('id, projectId, title, description, status, priority, estimatedHours, assignedTo, createdBy, dueDate, createdAt, updatedAt, meetingId, reviewerId')
-          .eq('meetingId', id)
-          .order('createdAt', { ascending: false });
-        
-        // If camelCase fails, try lowercase (PostgreSQL lowercases unquoted identifiers)
-        if (tasksResult.error && (
-          tasksResult.error.code === 'PGRST204' || 
-          tasksResult.error.code === '42703' ||
-          tasksResult.error.status === 400 ||
-          tasksResult.error.message?.includes('column') ||
-          tasksResult.error.message?.includes('does not exist')
-        )) {
-          tasksResult = await supabase
-            .from('tasks')
-            .select('id, projectid, title, description, status, priority, estimatedhours, assignedto, createdby, duedate, createdat, updatedat, meetingid, reviewerid')
-            .eq('meetingid', id)
-            .order('createdat', { ascending: false });
-        }
-        
-        // If that also fails, try select('*')
-        if (tasksResult.error && (
-          tasksResult.error.code === 'PGRST204' || 
-          tasksResult.error.code === '42703' ||
-          tasksResult.error.status === 400 ||
-          tasksResult.error.message?.includes('column') ||
-          tasksResult.error.message?.includes('does not exist')
-        )) {
-          tasksResult = await supabase
-            .from('tasks')
-            .select('*')
-            .eq('meetingId', id)
-            .order('createdAt', { ascending: false });
-        }
-        
-        // Normalize the returned data
-        const normalizedTasks = (tasksResult.data || []).map((t: any) => ({
-          id: t.id,
-          projectId: t.projectId || t.projectid || t.project_id || null,
-          title: t.title,
-          description: t.description,
-          status: t.status,
-          priority: t.priority,
-          estimatedHours: t.estimatedHours || t.estimatedhours || t.estimated_hours || 0,
-          assignedTo: t.assignedTo || t.assignedto || t.assigned_to,
-          createdBy: t.createdBy || t.createdby || t.created_by,
-          dueDate: t.dueDate || t.duedate || t.due_date,
-          createdAt: t.createdAt || t.createdat || t.created_at,
-          updatedAt: t.updatedAt || t.updatedat || t.updated_at,
-          meetingId: t.meetingId || t.meetingid || t.meeting_id || null,
-          reviewerId: t.reviewerId || t.reviewerid || t.reviewer_id || null,
-        }));
-        
-        setTasksFromMeeting(normalizedTasks as Task[]);
+        // Find tasks that were created from this meeting using API
+        const allTasks = await apiClient.getTasks();
+        const meetingTasks = allTasks.filter((task: any) => task.meetingId === id);
+        setTasksFromMeeting(meetingTasks);
       }
     } catch (err) {
       toast({
@@ -291,12 +238,14 @@ export default function MeetingDetail() {
       
       // Reload suggestions and tasks
       if (id) {
-        const [updatedSuggestions, { data: meetingTasks }] = await Promise.all([
+        const [updatedSuggestions, allTasks] = await Promise.all([
           getMeetingSuggestions(id),
-          supabase.from('tasks').select('*').eq('meetingId', id).order('createdAt', { ascending: false })
+          apiClient.getTasks()
         ]);
         setSuggestions(updatedSuggestions);
-        setTasksFromMeeting(meetingTasks || []);
+        // Filter tasks by meetingId
+        const meetingTasks = allTasks.filter((task: any) => task.meetingId === id);
+        setTasksFromMeeting(meetingTasks);
       }
 
       toast({
@@ -369,12 +318,14 @@ export default function MeetingDetail() {
       
       // Reload suggestions and tasks
       if (id) {
-        const [updatedSuggestions, { data: meetingTasks }] = await Promise.all([
+        const [updatedSuggestions, allTasks] = await Promise.all([
           getMeetingSuggestions(id),
-          supabase.from('tasks').select('*').eq('meetingId', id).order('createdAt', { ascending: false })
+          apiClient.getTasks()
         ]);
         setSuggestions(updatedSuggestions);
-        setTasksFromMeeting(meetingTasks || []);
+        // Filter tasks by meetingId
+        const meetingTasks = allTasks.filter((task: any) => task.meetingId === id);
+        setTasksFromMeeting(meetingTasks);
       }
 
       toast({

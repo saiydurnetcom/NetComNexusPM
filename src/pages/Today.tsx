@@ -45,16 +45,16 @@ export default function Today() {
 
   // Priority order: urgent > high > medium > low
   const priorityOrder: Record<Task['priority'], number> = {
-    urgent: 4,
-    high: 3,
-    medium: 2,
-    low: 1,
+    URGENT: 4,
+    HIGH: 3,
+    MEDIUM: 2,
+    LOW: 1,
   };
 
   // Continue Working - Tasks in Progress, sorted by priority
   const continueWorkingTasks = useMemo(() => {
     return userTasks
-      .filter(task => task.status === 'in_progress')
+      .filter(task => task.status === 'IN_PROGRESS')
       .sort((a, b) => priorityOrder[b.priority] - priorityOrder[a.priority]);
   }, [userTasks, priorityOrder]);
 
@@ -65,8 +65,8 @@ export default function Today() {
         if (!task.dueDate) return false;
         const dueDate = parseISO(task.dueDate);
         return isToday(dueDate) && 
-               task.status !== 'completed' && 
-               task.status !== 'in_progress';
+               task.status !== 'COMPLETED' && 
+               task.status !== 'IN_PROGRESS';
       })
       .sort((a, b) => priorityOrder[b.priority] - priorityOrder[a.priority]);
   }, [userTasks, priorityOrder]);
@@ -94,11 +94,11 @@ export default function Today() {
 
   const getPriorityColor = (priority: Task['priority']) => {
     switch (priority) {
-      case 'urgent':
+      case 'URGENT':
         return 'bg-red-100 text-red-800 border-red-300';
-      case 'high':
+      case 'HIGH':
         return 'bg-orange-100 text-orange-800 border-orange-300';
-      case 'medium':
+      case 'MEDIUM':
         return 'bg-yellow-100 text-yellow-800 border-yellow-300';
       default:
         return 'bg-gray-100 text-gray-800 border-gray-300';
@@ -107,13 +107,13 @@ export default function Today() {
 
   const getStatusIcon = (status: Task['status']) => {
     switch (status) {
-      case 'in_progress':
+      case 'IN_PROGRESS':
         return <Play className="h-4 w-4 text-blue-600" />;
-      case 'completed':
+      case 'COMPLETED':
         return <CheckCircle2 className="h-4 w-4 text-green-600" />;
-      case 'blocked':
+      case 'BLOCKED':
         return <AlertCircle className="h-4 w-4 text-red-600" />;
-      case 'review':
+      case 'REVIEW':
         return <Circle className="h-4 w-4 text-yellow-600" />;
       default:
         return <Circle className="h-4 w-4 text-gray-400" />;

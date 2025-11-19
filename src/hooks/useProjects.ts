@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { Project, ProjectCreateData } from '../types';
-import { projectsService } from '../lib/supabase-data';
+import { projectsService } from '../lib/api-data';
 
 export const useProjects = () => {
   const [projects, setProjects] = useState<Project[]>([]);

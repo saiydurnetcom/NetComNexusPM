@@ -16,11 +16,11 @@ import { useProjects } from '@/hooks/useProjects';
 import { useAuth } from '@/hooks/useAuth';
 import { useTimeTracking } from '@/hooks/useTimeTracking';
 import { useToast } from '@/components/ui/use-toast';
-import { tasksService } from '@/lib/supabase-data';
+import { tasksService } from '@/lib/api-data';
 import { usersService } from '@/lib/users-service';
-import { supabase } from '@/lib/supabase';
+import { apiClient } from '@/lib/api-client';
 import { Task, User, Tag } from '@/types';
-import { Plus, Search, Filter, Edit, Trash2, Calendar, Clock, ArrowUpDown, CheckCircle2, Circle, PlayCircle, User as UserIcon, FolderKanban, Play, Square, Tag as TagIcon, List, Grid, LayoutGrid } from 'lucide-react';
+import { Plus, Search, Filter, Edit, Trash2, Calendar, Clock, ArrowUpDown, CheckCircle2, Circle, PlayCircle, User as UserIcon, FolderKanban, Play, Square, Tag as TagIcon, List, Grid, LayoutGrid, AlertCircle } from 'lucide-react';
 import { KanbanBoard } from '@/components/KanbanBoard';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { format } from 'date-fns';
@@ -46,7 +46,7 @@ export default function Tasks() {
   const [taskForm, setTaskForm] = useState({
     title: '',
     description: '',
-    priority: 'medium' as Task['priority'],
+    priority: 'MEDIUM' as Task['priority'],
     projectId: '',
     dueDate: '',
     estimatedHours: 0,
@@ -98,66 +98,33 @@ export default function Tasks() {
 
   const loadTags = async () => {
     try {
-      const { data, error } = await supabase
-        .from('tags')
-        .select('*')
-        .order('name');
-      if (error) throw error;
-      setAvailableTags(data || []);
+      const tags = await apiClient.getTags();
+      setAvailableTags(tags);
     } catch (error) {
       console.error('Error loading tags:', error);
+      setAvailableTags([]);
     }
   };
 
   const loadTaskTags = async () => {
     try {
-      // Try camelCase first, fallback to snake_case
-      let query = supabase
-        .from('task_tags')
-        .select('taskId, tagId, tags(*)');
+      // Load tags for all tasks
+      const allTasks = await tasksService.getTasks();
+      const tagMap: Record<string, Tag[]> = {};
       
-      const { data, error } = await query;
-      
-      if (error) {
-        // If camelCase fails, try snake_case
-        if (error.code === '42703' || error.message?.includes('taskId') || error.message?.includes('taskid')) {
-          const { data: snakeData, error: snakeError } = await supabase
-            .from('task_tags')
-            .select('taskid, tagid, tags(*)');
-          
-          if (snakeError) {
-            console.error('Error loading task tags:', snakeError);
-            setTaskTags({});
-            return;
+      await Promise.all(
+        allTasks.map(async (task) => {
+          try {
+            const taskTags = await apiClient.getTaskTags(task.id);
+            tagMap[task.id] = taskTags.map((tt: any) => tt.tag);
+          } catch (error) {
+            console.error(`Error loading tags for task ${task.id}:`, error);
+            tagMap[task.id] = [];
           }
-          
-          const tagsByTask: Record<string, Tag[]> = {};
-          (snakeData || []).forEach((tt: any) => {
-            const taskId = tt.taskid || tt.taskId;
-            if (!tagsByTask[taskId]) {
-              tagsByTask[taskId] = [];
-            }
-            if (tt.tags) {
-              tagsByTask[taskId].push(tt.tags);
-            }
-          });
-          setTaskTags(tagsByTask);
-          return;
-        }
-        throw error;
-      }
+        })
+      );
       
-      const tagsByTask: Record<string, Tag[]> = {};
-      (data || []).forEach((tt: any) => {
-        const taskId = tt.taskId || tt.taskid;
-        if (!tagsByTask[taskId]) {
-          tagsByTask[taskId] = [];
-        }
-        if (tt.tags) {
-          tagsByTask[taskId].push(tt.tags);
-        }
-      });
-      setTaskTags(tagsByTask);
+      setTaskTags(tagMap);
     } catch (error) {
       console.error('Error loading task tags:', error);
       setTaskTags({});
@@ -166,7 +133,7 @@ export default function Tasks() {
 
   // Filtered and sorted tasks
   const filteredTasks = useMemo(() => {
-    let filtered = tasks.filter(task => {
+    const filtered = tasks.filter(task => {
       // Search filter
       const matchesSearch = searchTerm === '' || 
         task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -197,19 +164,23 @@ export default function Tasks() {
         case 'dueDate':
           comparison = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
           break;
-        case 'priority':
-          const priorityOrder = { urgent: 4, high: 3, medium: 2, low: 1 };
+        case 'priority': {
+          const priorityOrder = { URGENT: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
           comparison = priorityOrder[a.priority] - priorityOrder[b.priority];
           break;
-        case 'status':
-          const statusOrder = { todo: 1, in_progress: 2, review: 3, completed: 4 };
+        }
+        case 'status': {
+          const statusOrder = { TODO: 1, IN_PROGRESS: 2, REVIEW: 3, BLOCKED: 4, COMPLETED: 5 };
           comparison = statusOrder[a.status] - statusOrder[b.status];
           break;
+        }
+        default: {
+          comparison = 0;
+          break;
+        }
       }
-      
       return sortOrder === 'asc' ? comparison : -comparison;
     });
-
     return filtered;
   }, [tasks, searchTerm, statusFilter, priorityFilter, projectFilter, sortBy, sortOrder]);
 
@@ -222,41 +193,26 @@ export default function Tasks() {
         title: taskForm.title,
         description: taskForm.description,
         projectId: taskForm.projectId || undefined,
-        priority: taskForm.priority,
+        priority: taskForm.priority.toUpperCase() as Task['priority'],
         estimatedHours: taskForm.estimatedHours || 0,
         assignedTo: user.id,
         dueDate: taskForm.dueDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
       });
 
-      // Add tags to task
+      // Add tags to task using API
       if (taskForm.selectedTags.length > 0) {
-        // Try camelCase first, fallback to snake_case
-        let tagInserts = taskForm.selectedTags.map(tagId => ({
-          taskId: task.id,
-          tagId,
-        }));
-        let { error: tagError } = await supabase.from('task_tags').insert(tagInserts);
-        
-        if (tagError && (tagError.code === '42703' || tagError.message?.includes('taskId') || tagError.message?.includes('taskid'))) {
-          // Try snake_case
-          tagInserts = taskForm.selectedTags.map(tagId => ({
-            taskid: task.id,
-            tagid: tagId,
-          }));
-          const result = await supabase.from('task_tags').insert(tagInserts);
-          tagError = result.error;
+        try {
+          await apiClient.updateTaskTags(task.id, taskForm.selectedTags);
+        } catch (error) {
+          console.error('Error updating task tags:', error);
         }
-        
-        if (tagError && !tagError.message?.includes('does not exist')) {
-          console.error('Error inserting task tags:', tagError);
-        }
-        await loadTaskTags();
       }
+      await loadTaskTags();
       
       setTaskForm({
         title: '',
         description: '',
-        priority: 'medium',
+        priority: 'MEDIUM' as Task['priority'],
         projectId: '',
         dueDate: '',
         estimatedHours: 0,
@@ -284,7 +240,7 @@ export default function Tasks() {
       setTaskForm({
         title: task.title,
         description: task.description || '',
-        priority: task.priority,
+        priority: task.priority.toUpperCase() as Task['priority'],
         projectId: task.projectId || '',
         dueDate: task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '',
         estimatedHours: task.estimatedHours || 0,
@@ -298,48 +254,20 @@ export default function Tasks() {
     if (!editingTask || !taskForm.title.trim()) return;
 
     try {
-      // Update task via Supabase
-      const { error } = await supabase
-        .from('tasks')
-        .update({
-          title: taskForm.title,
-          description: taskForm.description,
-          priority: taskForm.priority,
-          projectId: taskForm.projectId || null,
-          dueDate: taskForm.dueDate || editingTask.dueDate,
-          updatedAt: new Date().toISOString(),
-        })
-        .eq('id', editingTask.id);
+      // Update task via API
+      await apiClient.updateTask(editingTask.id, {
+        title: taskForm.title,
+        description: taskForm.description,
+        priority: taskForm.priority.toUpperCase() as Task['priority'],
+        projectId: taskForm.projectId || undefined,
+        dueDate: taskForm.dueDate || editingTask.dueDate,
+      });
 
-      if (error) throw error;
-
-      // Update tags - try camelCase first, fallback to snake_case
-      let deleteResult = await supabase.from('task_tags').delete().eq('taskId', editingTask.id);
-      if (deleteResult.error && (deleteResult.error.code === '42703' || deleteResult.error.message?.includes('taskId'))) {
-        await supabase.from('task_tags').delete().eq('taskid', editingTask.id);
-      }
-      
-      // Insert new tags
-      if (taskForm.selectedTags.length > 0) {
-        let tagInserts = taskForm.selectedTags.map(tagId => ({
-          taskId: editingTask.id,
-          tagId,
-        }));
-        let { error: tagError } = await supabase.from('task_tags').insert(tagInserts);
-        
-        if (tagError && (tagError.code === '42703' || tagError.message?.includes('taskId') || tagError.message?.includes('taskid'))) {
-          // Try snake_case
-          tagInserts = taskForm.selectedTags.map(tagId => ({
-            taskid: editingTask.id,
-            tagid: tagId,
-          }));
-          const result = await supabase.from('task_tags').insert(tagInserts);
-          tagError = result.error;
-        }
-        
-        if (tagError && !tagError.message?.includes('does not exist')) {
-          console.error('Error inserting task tags:', tagError);
-        }
+      // Update tags using API
+      try {
+        await apiClient.updateTaskTags(editingTask.id, taskForm.selectedTags || []);
+      } catch (error) {
+        console.error('Error updating task tags:', error);
       }
       await loadTaskTags();
 
@@ -362,12 +290,7 @@ export default function Tasks() {
 
   const handleDeleteTask = async (taskId: string) => {
     try {
-      const { error } = await supabase
-        .from('tasks')
-        .delete()
-        .eq('id', taskId);
-
-      if (error) throw error;
+      await apiClient.deleteTask(taskId);
 
       await fetchTasks();
       toast({
@@ -440,13 +363,13 @@ export default function Tasks() {
 
   const getStatusIcon = (status: Task['status']) => {
     switch (status) {
-      case 'completed':
+      case 'COMPLETED':
         return <CheckCircle2 className="h-4 w-4 text-green-600" />;
-      case 'in_progress':
+      case 'IN_PROGRESS':
         return <PlayCircle className="h-4 w-4 text-blue-600" />;
-      case 'review':
+      case 'REVIEW':
         return <AlertCircle className="h-4 w-4 text-orange-600" />;
-      case 'blocked':
+      case 'BLOCKED':
         return <AlertCircle className="h-4 w-4 text-red-600" />;
       default:
         return <Circle className="h-4 w-4 text-gray-400" />;
@@ -455,25 +378,30 @@ export default function Tasks() {
 
   const getPriorityColor = (priority: Task['priority']) => {
     switch (priority) {
-      case 'urgent':
+      case 'URGENT':
         return 'destructive';
-      case 'high':
+      case 'HIGH':
         return 'default';
-      case 'medium':
+      case 'MEDIUM':
         return 'secondary';
-      case 'low':
+      case 'LOW':
         return 'outline';
+      default:
+        return 'outline';
+        break;
     }
   };
 
   const getStatusColor = (status: Task['status']) => {
     switch (status) {
-      case 'completed':
+      case 'COMPLETED':
         return 'default';
-      case 'in_progress':
+      case 'IN_PROGRESS':
         return 'default';
-      case 'review':
+      case 'REVIEW':
         return 'secondary';
+      case 'BLOCKED':
+        return 'destructive';
       default:
         return 'outline';
     }
@@ -492,6 +420,8 @@ export default function Tasks() {
               <h1 className="text-3xl font-bold text-gray-900">Tasks</h1>
               <p className="text-gray-600">Manage all your tasks</p>
             </div>
+
+            {/* Create Task Dialog */}
             <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
               <DialogTrigger asChild>
                 <Button>
@@ -550,10 +480,10 @@ export default function Tasks() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="low">Low</SelectItem>
-                          <SelectItem value="medium">Medium</SelectItem>
-                          <SelectItem value="high">High</SelectItem>
-                          <SelectItem value="urgent">Urgent</SelectItem>
+                          <SelectItem value="LOW">Low</SelectItem>
+                          <SelectItem value="MEDIUM">Medium</SelectItem>
+                          <SelectItem value="HIGH">High</SelectItem>
+                          <SelectItem value="URGENT">Urgent</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -625,11 +555,11 @@ export default function Tasks() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All Status</SelectItem>
-                        <SelectItem value="todo">To Do</SelectItem>
-                        <SelectItem value="in_progress">In Progress</SelectItem>
-                        <SelectItem value="review">Review</SelectItem>
-                        <SelectItem value="blocked">Blocked</SelectItem>
-                        <SelectItem value="completed">Completed</SelectItem>
+                        <SelectItem value="TODO">To Do</SelectItem>
+                        <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                        <SelectItem value="REVIEW">Review</SelectItem>
+                        <SelectItem value="BLOCKED">Blocked</SelectItem>
+                        <SelectItem value="COMPLETED">Completed</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -641,10 +571,10 @@ export default function Tasks() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All Priorities</SelectItem>
-                        <SelectItem value="urgent">Urgent</SelectItem>
-                        <SelectItem value="high">High</SelectItem>
-                        <SelectItem value="medium">Medium</SelectItem>
-                        <SelectItem value="low">Low</SelectItem>
+                        <SelectItem value="URGENT">Urgent</SelectItem>
+                        <SelectItem value="HIGH">High</SelectItem>
+                        <SelectItem value="MEDIUM">Medium</SelectItem>
+                        <SelectItem value="LOW">Low</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -696,6 +626,7 @@ export default function Tasks() {
           </Card>
         </div>
 
+        {/* Error Loading Tasks */}
         {tasksError && (
           <Card className="mb-6 border-destructive">
             <CardContent className="pt-6">
@@ -707,6 +638,7 @@ export default function Tasks() {
           </Card>
         )}
 
+        {/* Loading Tasks */}
         {isLoading && (
           <div className="text-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
@@ -765,7 +697,7 @@ export default function Tasks() {
                     <div>
                       <p className="text-sm text-muted-foreground">Todo</p>
                       <p className="text-2xl font-bold text-gray-600">
-                        {tasks.filter(t => t.status === 'todo').length}
+                        {tasks.filter(t => t.status === 'TODO').length}
                       </p>
                     </div>
                     <Circle className="h-8 w-8 text-gray-600" />
@@ -778,7 +710,7 @@ export default function Tasks() {
                     <div>
                       <p className="text-sm text-muted-foreground">In Progress</p>
                       <p className="text-2xl font-bold text-blue-600">
-                        {tasks.filter(t => t.status === 'in_progress').length}
+                        {tasks.filter(t => t.status === 'IN_PROGRESS').length}
                       </p>
                     </div>
                     <PlayCircle className="h-8 w-8 text-blue-600" />
@@ -791,7 +723,7 @@ export default function Tasks() {
                     <div>
                       <p className="text-sm text-muted-foreground">Completed</p>
                       <p className="text-2xl font-bold text-green-600">
-                        {tasks.filter(t => t.status === 'completed').length}
+                        {tasks.filter(t => t.status === 'COMPLETED').length}
                       </p>
                     </div>
                     <CheckCircle2 className="h-8 w-8 text-green-600" />
@@ -804,11 +736,11 @@ export default function Tasks() {
                     <div>
                       <p className="text-sm text-muted-foreground">Overdue</p>
                       <p className="text-2xl font-bold text-red-600">
-                        {tasks.filter(t => isOverdue(t.dueDate) && t.status !== 'completed').length}
+                        {tasks.filter(t => isOverdue(t.dueDate) && t.status !== 'COMPLETED').length}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
                         {(() => {
-                          const overdueInProgress = tasks.filter(t => isOverdue(t.dueDate) && t.status === 'in_progress').length;
+                          const overdueInProgress = tasks.filter(t => isOverdue(t.dueDate) && t.status === 'IN_PROGRESS').length;
                           return overdueInProgress > 0 ? `(${overdueInProgress} in progress)` : '';
                         })()}
                       </p>
@@ -948,10 +880,10 @@ export default function Tasks() {
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="todo">To Do</SelectItem>
-                                  <SelectItem value="in_progress">In Progress</SelectItem>
-                                  <SelectItem value="review">Review</SelectItem>
-                                  <SelectItem value="completed">Completed</SelectItem>
+                                  <SelectItem value="TODO">To Do</SelectItem>
+                                  <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                                  <SelectItem value="REVIEW">Review</SelectItem>
+                                  <SelectItem value="COMPLETED">Completed</SelectItem>
                                 </SelectContent>
                               </Select>
                             </TableCell>
@@ -1077,7 +1009,7 @@ export default function Tasks() {
                     <Card
                       key={task.id}
                       className={`hover:shadow-lg transition-all cursor-pointer h-full flex flex-col ${
-                        isTaskOverdue && task.status !== 'completed' ? 'border-red-300 bg-red-50/50' : ''
+                        isTaskOverdue && task.status !== 'COMPLETED' ? 'border-red-300 bg-red-50/50' : ''
                       }`}
                       onClick={() => navigate(`/tasks/${task.id}`)}
                     >
@@ -1129,11 +1061,11 @@ export default function Tasks() {
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="todo">To Do</SelectItem>
-                                <SelectItem value="in_progress">In Progress</SelectItem>
-                                <SelectItem value="review">Review</SelectItem>
-                                <SelectItem value="blocked">Blocked</SelectItem>
-                                <SelectItem value="completed">Completed</SelectItem>
+                                <SelectItem value="TODO">To Do</SelectItem>
+                                <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                                <SelectItem value="REVIEW">Review</SelectItem>
+                                <SelectItem value="BLOCKED">Blocked</SelectItem>
+                                <SelectItem value="COMPLETED">Completed</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
@@ -1178,7 +1110,7 @@ export default function Tasks() {
                             <span className={`text-xs ${isTaskOverdue ? 'text-red-600 font-semibold' : 'text-muted-foreground'}`}>
                               {format(dueDate, 'MMM dd, yyyy')}
                             </span>
-                            {isTaskOverdue && task.status !== 'completed' && (
+                            {isTaskOverdue && task.status !== 'COMPLETED' && (
                               <Badge variant="destructive" className="text-xs ml-1">Overdue</Badge>
                             )}
                           </div>
@@ -1360,10 +1292,10 @@ export default function Tasks() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                      <SelectItem value="urgent">Urgent</SelectItem>
+                      <SelectItem value="LOW">Low</SelectItem>
+                      <SelectItem value="MEDIUM">Medium</SelectItem>
+                      <SelectItem value="HIGH">High</SelectItem>
+                      <SelectItem value="URGENT">Urgent</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

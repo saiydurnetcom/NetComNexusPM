@@ -13,7 +13,7 @@ export interface Project {
   id: string;
   name: string;
   description: string;
-  status: 'active' | 'completed' | 'archived';
+  status: 'ACTIVE' | 'COMPLETED' | 'ARCHIVED';
   startDate: string;
   endDate: string;
   createdBy: string;
@@ -26,16 +26,16 @@ export interface Task {
   projectId: string;
   title: string;
   description: string;
-  status: 'todo' | 'in_progress' | 'review' | 'completed' | 'blocked';
-  priority: 'low' | 'medium' | 'high' | 'urgent';
+  status: 'TODO' | 'IN_PROGRESS' | 'REVIEW' | 'BLOCKED' | 'COMPLETED';
+  priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   estimatedHours: number;
   assignedTo: string;
-  reviewerId?: string | null; // Reviewer when task is in review status
-  meetingId?: string | null; // Meeting from which this task was created
-  parentTaskId?: string | null; // Parent task for sub-tasks
+  reviewerId?: string | null;
+  meetingId?: string | null;
+  parentTaskId?: string | null;
   createdBy: string;
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string;
   dueDate: string;
 }
 
@@ -127,13 +127,17 @@ export interface ProjectCreateData {
   description: string;
   startDate: string;
   endDate: string;
+  status: 'ACTIVE' | 'COMPLETED' | 'ARCHIVED';
+  purpose?: string;
+  resources?: Record<string, unknown>;
+  tags?: string[];
 }
 
 export interface TaskCreateData {
   projectId?: string; // Optional - tasks can exist without projects
   title: string;
   description: string;
-  priority: 'low' | 'medium' | 'high' | 'urgent';
+  priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   estimatedHours: number;
   assignedTo: string;
   dueDate: string;

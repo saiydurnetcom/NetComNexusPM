@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Notification } from '../types';
-import { notificationsService } from '../lib/supabase-data';
+import { notificationsService } from '../lib/api-data';
 
 export const useNotifications = () => {
   const [notifications, setNotifications] = useState<Notification[]>([]);

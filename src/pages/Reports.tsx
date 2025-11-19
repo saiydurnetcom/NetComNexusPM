@@ -13,12 +13,12 @@ import { useTasks } from '@/hooks/useTasks';
 import { useTimeTracking } from '@/hooks/useTimeTracking';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/components/ui/use-toast';
-import { 
-  BarChart3, 
-  TrendingUp, 
-  Users, 
-  FolderKanban, 
-  CheckSquare, 
+import {
+  BarChart3,
+  TrendingUp,
+  Users,
+  FolderKanban,
+  CheckSquare,
   Clock,
   FileText,
   Sparkles,
@@ -34,9 +34,9 @@ import { Pie, PieChart, Cell, Bar, BarChart, XAxis, YAxis, CartesianGrid, Legend
 import { adminService } from '@/lib/admin-service';
 import { Team, Department, User as UserType } from '@/types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { 
-  exportProjectStatusReport, 
-  exportTaskStatisticsReport, 
+import {
+  exportProjectStatusReport,
+  exportTaskStatisticsReport,
   exportProductivityReport,
   exportResourceAllocationReport
 } from '@/lib/export-utils';
@@ -49,11 +49,11 @@ export default function Reports() {
   const { tasks, fetchTasks } = useTasks();
   const { timeEntries, fetchTimeEntries } = useTimeTracking();
   const { toast } = useToast();
-  
+
   // Access control: managers and admins see all, members see only their own
   const userRole = user?.role?.toLowerCase();
   const isManagerOrAdmin = userRole === 'admin' || userRole === 'manager';
-  
+
   // Teams and Departments
   const [teams, setTeams] = useState<Team[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -94,7 +94,7 @@ export default function Reports() {
   const loadSavedReports = async () => {
     setIsLoadingReports(true);
     try {
-      const { projectReportsService } = await import('@/lib/supabase-data');
+      const { projectReportsService } = await import('@/lib/api-data');
       const reports = await projectReportsService.getReports(
         selectedProject !== 'all' ? selectedProject : undefined
       );
@@ -111,7 +111,7 @@ export default function Reports() {
   // Filter data based on selections and access control
   const filteredProjects = useMemo(() => {
     let filtered = projects;
-    
+
     // Access control: members see only their own projects/tasks
     if (!isManagerOrAdmin && user) {
       // Filter projects where user is assigned to tasks
@@ -120,7 +120,7 @@ export default function Reports() {
       );
       filtered = filtered.filter(p => userTaskProjectIds.has(p.id));
     }
-    
+
     if (selectedProject !== 'all') {
       filtered = filtered.filter(p => p.id === selectedProject);
     }
@@ -129,17 +129,17 @@ export default function Reports() {
 
   const filteredTasks = useMemo(() => {
     let filtered = tasks;
-    
+
     // Access control: members see only their own tasks
     if (!isManagerOrAdmin && user) {
       filtered = filtered.filter(t => t.assignedTo === user.id);
     }
-    
+
     // Filter by project
     if (selectedProject !== 'all') {
       filtered = filtered.filter(t => t.projectId === selectedProject);
     }
-    
+
     // Filter by team
     if (selectedTeam !== 'all' && isManagerOrAdmin) {
       const teamUserIds = allUsers
@@ -147,7 +147,7 @@ export default function Reports() {
         .map(u => u.id);
       filtered = filtered.filter(t => teamUserIds.includes(t.assignedTo));
     }
-    
+
     // Filter by department
     if (selectedDepartment !== 'all' && isManagerOrAdmin) {
       const deptUserIds = allUsers
@@ -155,18 +155,18 @@ export default function Reports() {
         .map(u => u.id);
       filtered = filtered.filter(t => deptUserIds.includes(t.assignedTo));
     }
-    
+
     return filtered;
   }, [tasks, selectedProject, selectedTeam, selectedDepartment, isManagerOrAdmin, user, allUsers]);
 
   const filteredTimeEntries = useMemo(() => {
     let filtered = timeEntries;
-    
+
     // Access control: members see only their own time entries
     if (!isManagerOrAdmin && user) {
       filtered = filtered.filter(entry => entry.userId === user.id);
     }
-    
+
     // Filter by date range
     const now = new Date();
     let startDate: Date;
@@ -183,15 +183,15 @@ export default function Reports() {
       default:
         startDate = new Date(0);
     }
-    
+
     filtered = filtered.filter(entry => new Date(entry.startTime) >= startDate);
-    
+
     // Filter by project if selected
     if (selectedProject !== 'all') {
       const projectTaskIds = filteredTasks.map(t => t.id);
       filtered = filtered.filter(entry => projectTaskIds.includes(entry.taskId));
     }
-    
+
     // Filter by team
     if (selectedTeam !== 'all' && isManagerOrAdmin) {
       const teamUserIds = allUsers
@@ -199,7 +199,7 @@ export default function Reports() {
         .map(u => u.id);
       filtered = filtered.filter(entry => teamUserIds.includes(entry.userId));
     }
-    
+
     // Filter by department
     if (selectedDepartment !== 'all' && isManagerOrAdmin) {
       const deptUserIds = allUsers
@@ -207,7 +207,7 @@ export default function Reports() {
         .map(u => u.id);
       filtered = filtered.filter(entry => deptUserIds.includes(entry.userId));
     }
-    
+
     return filtered;
   }, [timeEntries, dateRange, selectedProject, selectedTeam, selectedDepartment, filteredTasks, isManagerOrAdmin, user, allUsers]);
 
@@ -215,40 +215,40 @@ export default function Reports() {
   const projectStatusData = useMemo(() => {
     return filteredProjects.map(project => {
       const projectTasks = filteredTasks.filter(t => t.projectId === project.id);
-      const completedTasks = projectTasks.filter(t => t.status === 'completed').length;
+      const completedTasks = projectTasks.filter(t => t.status === 'COMPLETED').length;
       const totalTasks = projectTasks.length;
       const completionPercentage = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
-      
+
       const projectTimeEntries = filteredTimeEntries.filter(entry => {
         const task = filteredTasks.find(t => t.id === entry.taskId);
         return task?.projectId === project.id;
       });
-      
+
       const totalHours = projectTimeEntries.reduce((sum, entry) => sum + (entry.durationMinutes || 0), 0) / 60;
       const estimatedHours = projectTasks.reduce((sum, task) => sum + (task.estimatedHours || 0), 0);
       const hoursProgress = estimatedHours > 0 ? (totalHours / estimatedHours) * 100 : 0;
-      
+
       const statusBreakdown = {
-        todo: projectTasks.filter(t => t.status === 'todo').length,
-        in_progress: projectTasks.filter(t => t.status === 'in_progress').length,
-        review: projectTasks.filter(t => t.status === 'review').length,
+        todo: projectTasks.filter(t => t.status === 'TODO').length,
+        in_progress: projectTasks.filter(t => t.status === 'IN_PROGRESS').length,
+        review: projectTasks.filter(t => t.status === 'REVIEW').length,
         completed: completedTasks,
       };
-      
+
       const priorityBreakdown = {
-        urgent: projectTasks.filter(t => t.priority === 'urgent').length,
-        high: projectTasks.filter(t => t.priority === 'high').length,
-        medium: projectTasks.filter(t => t.priority === 'medium').length,
-        low: projectTasks.filter(t => t.priority === 'low').length,
+        urgent: projectTasks.filter(t => t.priority === 'URGENT').length,
+        high: projectTasks.filter(t => t.priority === 'HIGH').length,
+        medium: projectTasks.filter(t => t.priority === 'MEDIUM').length,
+        low: projectTasks.filter(t => t.priority === 'LOW').length,
       };
-      
+
       const startDate = new Date(project.startDate);
       const endDate = new Date(project.endDate);
       const now = new Date();
       const totalDuration = endDate.getTime() - startDate.getTime();
       const elapsed = now.getTime() - startDate.getTime();
       const timelineProgress = totalDuration > 0 ? Math.min(100, (elapsed / totalDuration) * 100) : 0;
-      
+
       return {
         ...project,
         completionPercentage,
@@ -269,40 +269,40 @@ export default function Reports() {
   const taskStatistics = useMemo(() => {
     const total = filteredTasks.length;
     const byStatus = {
-      todo: filteredTasks.filter(t => t.status === 'todo').length,
-      in_progress: filteredTasks.filter(t => t.status === 'in_progress').length,
-      review: filteredTasks.filter(t => t.status === 'review').length,
-      completed: filteredTasks.filter(t => t.status === 'completed').length,
+      todo: filteredTasks.filter(t => t.status === 'TODO').length,
+      in_progress: filteredTasks.filter(t => t.status === 'IN_PROGRESS').length,
+      review: filteredTasks.filter(t => t.status === 'REVIEW').length,
+      completed: filteredTasks.filter(t => t.status === 'COMPLETED').length,
     };
-    
+
     const byPriority = {
-      urgent: filteredTasks.filter(t => t.priority === 'urgent').length,
-      high: filteredTasks.filter(t => t.priority === 'high').length,
-      medium: filteredTasks.filter(t => t.priority === 'medium').length,
-      low: filteredTasks.filter(t => t.priority === 'low').length,
+      urgent: filteredTasks.filter(t => t.priority === 'URGENT').length,
+      high: filteredTasks.filter(t => t.priority === 'HIGH').length,
+      medium: filteredTasks.filter(t => t.priority === 'MEDIUM').length,
+      low: filteredTasks.filter(t => t.priority === 'LOW').length,
     };
-    
+
     const overdue = filteredTasks.filter(t => {
-      if (t.status === 'completed') return false;
+      if (t.status === 'COMPLETED') return false;
       const dueDate = new Date(t.dueDate);
       return dueDate < new Date();
     }).length;
-    
-    const avgEstimatedHours = total > 0 
-      ? filteredTasks.reduce((sum, t) => sum + (t.estimatedHours || 0), 0) / total 
+
+    const avgEstimatedHours = total > 0
+      ? filteredTasks.reduce((sum, t) => sum + (t.estimatedHours || 0), 0) / total
       : 0;
-    
+
     // Calculate average time to complete (for completed tasks)
-    const completedTasks = filteredTasks.filter(t => t.status === 'completed' && t.createdAt && t.updatedAt);
+    const completedTasks = filteredTasks.filter(t => t.status === 'COMPLETED' && t.createdAt && t.updatedAt);
     const avgTimeToComplete = completedTasks.length > 0
       ? completedTasks.reduce((sum, t) => {
-          const created = new Date(t.createdAt);
-          const updated = new Date(t.updatedAt);
-          const days = (updated.getTime() - created.getTime()) / (1000 * 60 * 60 * 24);
-          return sum + days;
-        }, 0) / completedTasks.length
+        const created = new Date(t.createdAt);
+        const updated = new Date(t.updatedAt);
+        const days = (updated.getTime() - created.getTime()) / (1000 * 60 * 60 * 24);
+        return sum + days;
+      }, 0) / completedTasks.length
       : 0;
-    
+
     return {
       total,
       byStatus,
@@ -312,13 +312,13 @@ export default function Reports() {
       avgTimeToComplete,
     };
   }, [filteredTasks]);
-  
+
   // Velocity Trends (tasks completed over time)
   const velocityTrends = useMemo(() => {
     const now = new Date();
     const weeks: { week: string; completed: number; hours: number }[] = [];
     const months: { month: string; completed: number; hours: number }[] = [];
-    
+
     // Weekly velocity (last 12 weeks)
     for (let i = 11; i >= 0; i--) {
       const weekStart = startOfWeek(subWeeks(now, i));
@@ -334,14 +334,14 @@ export default function Reports() {
           return entryDate >= weekStart && entryDate <= weekEnd;
         })
         .reduce((sum, e) => sum + (e.durationMinutes || 0), 0) / 60;
-      
+
       weeks.push({
         week: format(weekStart, 'MMM dd'),
         completed: weekTasks.length,
         hours: weekHours,
       });
     }
-    
+
     // Monthly velocity (last 12 months)
     for (let i = 11; i >= 0; i--) {
       const monthStart = startOfMonth(subMonths(now, i));
@@ -357,14 +357,14 @@ export default function Reports() {
           return entryDate >= monthStart && entryDate <= monthEnd;
         })
         .reduce((sum, e) => sum + (e.durationMinutes || 0), 0) / 60;
-      
+
       months.push({
         month: format(monthStart, 'MMM yyyy'),
         completed: monthTasks.length,
         hours: monthHours,
       });
     }
-    
+
     return { weeks, months };
   }, [filteredTasks, filteredTimeEntries]);
 
@@ -376,7 +376,7 @@ export default function Reports() {
       projectName: project.name,
       totalHours: project.totalHours,
       estimatedHours: project.estimatedHours,
-      productivity: project.estimatedHours > 0 
+      productivity: project.estimatedHours > 0
         ? Math.min(100, (project.totalHours / project.estimatedHours) * 100)
         : 0,
       billableHours: filteredTimeEntries
@@ -386,7 +386,7 @@ export default function Reports() {
         })
         .reduce((sum, entry) => sum + (entry.durationMinutes || 0), 0) / 60,
     }));
-    
+
     // Team and Department productivity would require team/department data
     // For now, we'll calculate user-level productivity
     const userProductivity = filteredTimeEntries.reduce((acc, entry) => {
@@ -404,7 +404,7 @@ export default function Reports() {
       }
       return acc;
     }, {} as Record<string, { userId: string; totalHours: number; billableHours: number }>);
-    
+
     return {
       project: projectProductivity,
       users: Object.values(userProductivity),
@@ -491,7 +491,7 @@ export default function Reports() {
 
   const handleGenerateWeeklyReport = async () => {
     let projectId = selectedProject;
-    
+
     // If "All Projects" is selected, try to use the first project
     if (!projectId || projectId === 'all') {
       if (projects.length > 0) {
@@ -522,7 +522,7 @@ export default function Reports() {
       setCxoReport(report);
       setSelectedProjectForReport(projectId);
       setIsReportDialogOpen(true);
-      
+
       // Auto-save the weekly report
       try {
         const projectName = projects.find(p => p.id === projectId)?.name;
@@ -555,7 +555,7 @@ export default function Reports() {
 
   const handleDeleteReport = async (reportId: string) => {
     try {
-      const { projectReportsService } = await import('@/lib/supabase-data');
+      const { projectReportsService } = await import('@/lib/api-data');
       await projectReportsService.deleteReport(reportId);
       toast({
         title: 'Success',
@@ -889,8 +889,8 @@ export default function Reports() {
                           {project.daysRemaining > 0 ? `${project.daysRemaining} days left` : 'Overdue'}
                         </span>
                       </div>
-                      <Progress 
-                        value={project.timelineProgress} 
+                      <Progress
+                        value={project.timelineProgress}
                         className={project.daysRemaining < 0 ? 'bg-red-200' : ''}
                       />
                     </div>
@@ -915,7 +915,7 @@ export default function Reports() {
                         <Badge variant="outline" className="bg-green-50">Completed: {project.statusBreakdown.completed}</Badge>
                       </div>
                     </div>
-                    
+
                     {/* Team Members */}
                     {isManagerOrAdmin && (
                       <div className="pt-2 border-t">
@@ -938,14 +938,14 @@ export default function Reports() {
                               .filter(t => t.projectId === project.id)
                               .map(t => t.assignedTo)
                           )).length > 5 && (
-                            <Badge variant="outline" className="text-xs">
-                              +{Array.from(new Set(
-                                filteredTasks
-                                  .filter(t => t.projectId === project.id)
-                                  .map(t => t.assignedTo)
-                              )).length - 5} more
-                            </Badge>
-                          )}
+                              <Badge variant="outline" className="text-xs">
+                                +{Array.from(new Set(
+                                  filteredTasks
+                                    .filter(t => t.projectId === project.id)
+                                    .map(t => t.assignedTo)
+                                )).length - 5} more
+                              </Badge>
+                            )}
                         </div>
                       </div>
                     )}
@@ -1041,7 +1041,7 @@ export default function Reports() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-3xl font-bold">
-                    {taskStatistics.total > 0 
+                    {taskStatistics.total > 0
                       ? ((taskStatistics.byStatus.completed / taskStatistics.total) * 100).toFixed(1)
                       : 0}%
                   </div>
@@ -1059,16 +1059,15 @@ export default function Reports() {
                     {Object.entries(taskStatistics.byStatus).map(([status, count]) => (
                       <div key={status} className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <div className={`w-3 h-3 rounded-full ${
-                            status === 'completed' ? 'bg-green-500' :
-                            status === 'in_progress' ? 'bg-blue-500' :
-                            status === 'review' ? 'bg-yellow-500' :
-                            'bg-gray-500'
-                          }`} />
+                          <div className={`w-3 h-3 rounded-full ${status === 'completed' ? 'bg-green-500' :
+                              status === 'in_progress' ? 'bg-blue-500' :
+                                status === 'review' ? 'bg-yellow-500' :
+                                  'bg-gray-500'
+                            }`} />
                           <span className="text-sm capitalize">{status.replace('_', ' ')}</span>
                         </div>
                         <div className="flex items-center gap-4">
-                          <Progress 
+                          <Progress
                             value={taskStatistics.total > 0 ? (count / taskStatistics.total) * 100 : 0}
                             className="w-32"
                           />
@@ -1097,9 +1096,9 @@ export default function Reports() {
                         {Object.entries(taskStatistics.byStatus).map(([status], index) => (
                           <Cell key={`cell-${index}`} fill={
                             status === 'completed' ? 'hsl(142.1, 76.2%, 36.3%)' :
-                            status === 'in_progress' ? 'hsl(217.2, 91.2%, 59.8%)' :
-                            status === 'review' ? 'hsl(47.9, 95.7%, 53.1%)' :
-                            'hsl(var(--muted))'
+                              status === 'in_progress' ? 'hsl(217.2, 91.2%, 59.8%)' :
+                                status === 'review' ? 'hsl(47.9, 95.7%, 53.1%)' :
+                                  'hsl(var(--muted))'
                           } />
                         ))}
                       </Pie>
@@ -1117,16 +1116,15 @@ export default function Reports() {
                     {Object.entries(taskStatistics.byPriority).map(([priority, count]) => (
                       <div key={priority} className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <div className={`w-3 h-3 rounded-full ${
-                            priority === 'urgent' ? 'bg-red-500' :
-                            priority === 'high' ? 'bg-orange-500' :
-                            priority === 'medium' ? 'bg-yellow-500' :
-                            'bg-gray-500'
-                          }`} />
+                          <div className={`w-3 h-3 rounded-full ${priority === 'urgent' ? 'bg-red-500' :
+                              priority === 'high' ? 'bg-orange-500' :
+                                priority === 'medium' ? 'bg-yellow-500' :
+                                  'bg-gray-500'
+                            }`} />
                           <span className="text-sm capitalize">{priority}</span>
                         </div>
                         <div className="flex items-center gap-4">
-                          <Progress 
+                          <Progress
                             value={taskStatistics.total > 0 ? (count / taskStatistics.total) * 100 : 0}
                             className="w-32"
                           />
@@ -1155,9 +1153,9 @@ export default function Reports() {
                         {Object.entries(taskStatistics.byPriority).map(([priority], index) => (
                           <Cell key={`cell-${index}`} fill={
                             priority === 'urgent' ? 'hsl(0, 84.2%, 60.2%)' :
-                            priority === 'high' ? 'hsl(24.6, 95%, 53.1%)' :
-                            priority === 'medium' ? 'hsl(47.9, 95.7%, 53.1%)' :
-                            'hsl(var(--muted))'
+                              priority === 'high' ? 'hsl(24.6, 95%, 53.1%)' :
+                                priority === 'medium' ? 'hsl(47.9, 95.7%, 53.1%)' :
+                                  'hsl(var(--muted))'
                           } />
                         ))}
                       </Pie>
@@ -1166,7 +1164,7 @@ export default function Reports() {
                 </CardContent>
               </Card>
             </div>
-            
+
             {/* Velocity Trends */}
             <Card>
               <CardHeader>
@@ -1277,7 +1275,7 @@ export default function Reports() {
                   </>
                 )}
               </TabsList>
-              
+
               <TabsContent value="project" className="space-y-4">
                 <Card>
                   <CardHeader>
@@ -1315,7 +1313,7 @@ export default function Reports() {
                   </CardContent>
                 </Card>
               </TabsContent>
-              
+
               {isManagerOrAdmin && (
                 <>
                   <TabsContent value="team" className="space-y-4">
@@ -1344,7 +1342,7 @@ export default function Reports() {
                                 .filter(e => teamUserIds.includes(e.userId) && e.billable)
                                 .reduce((sum, e) => sum + (e.durationMinutes || 0), 0) / 60;
                               const billablePercent = teamHours > 0 ? (billableHours / teamHours) * 100 : 0;
-                              
+
                               return (
                                 <TableRow key={team.id}>
                                   <TableCell>{team.name}</TableCell>
@@ -1359,7 +1357,7 @@ export default function Reports() {
                       </CardContent>
                     </Card>
                   </TabsContent>
-                  
+
                   <TabsContent value="department" className="space-y-4">
                     <Card>
                       <CardHeader>
@@ -1386,7 +1384,7 @@ export default function Reports() {
                                 .filter(e => deptUserIds.includes(e.userId) && e.billable)
                                 .reduce((sum, e) => sum + (e.durationMinutes || 0), 0) / 60;
                               const billablePercent = deptHours > 0 ? (billableHours / deptHours) * 100 : 0;
-                              
+
                               return (
                                 <TableRow key={dept.id}>
                                   <TableCell>{dept.name}</TableCell>

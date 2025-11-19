@@ -8,7 +8,7 @@
 import { notificationPreferencesService } from './notification-preferences-service';
 import { emailService } from './email-service';
 import { pushNotificationService } from './push-notification-service';
-import { notificationsService } from './supabase-data';
+import { notificationsService } from './api-data';
 import { usersService } from './users-service';
 
 export interface NotificationTriggerOptions {
@@ -75,43 +75,9 @@ class NotificationTriggerService {
    */
   private async createInAppNotification(options: NotificationTriggerOptions): Promise<void> {
     try {
-      // Use Supabase to create notification (this will be handled by backend triggers or we create it directly)
-      // For now, we'll create it via the notifications service
-      const { supabase } = await import('./supabase');
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      // Try to create notification directly
-      try {
-        await supabase
-          .from('notifications')
-          .insert({
-            userId: options.userId,
-            type: options.type,
-            title: options.title,
-            message: options.message,
-            relatedTaskId: options.relatedTaskId || null,
-            relatedProjectId: options.relatedProjectId || null,
-            relatedCommentId: options.relatedCommentId || null,
-            read: false,
-          });
-      } catch (error: any) {
-        // Try lowercase if camelCase fails
-        if (error.code === '42703' || error.message?.includes('userid')) {
-          await supabase
-            .from('notifications')
-            .insert({
-              userid: options.userId,
-              type: options.type,
-              title: options.title,
-              message: options.message,
-              relatedtaskid: options.relatedTaskId || null,
-              relatedprojectid: options.relatedProjectId || null,
-              relatedcommentid: options.relatedCommentId || null,
-              read: false,
-            });
-        }
-      }
+      // No client-side creation; rely on backend to generate notifications from actions
+      // Optionally, this could refresh the notifications list:
+      await notificationsService.getNotifications(false).catch(() => {});
     } catch (error) {
       console.error('[Notification Trigger] Failed to create in-app notification:', error);
     }
