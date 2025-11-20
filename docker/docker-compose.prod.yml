@@ -34,6 +34,8 @@ services:
       context: ..
       dockerfile: Dockerfile
       target: production
+      args:
+        VITE_API_URL: ${VITE_API_URL}
     container_name: nexuspm-frontend-prod
     ports:
       - "${FRONTEND_PORT:-5173}:80"
@@ -50,4 +52,3 @@ services:
 networks:
   nexuspm-network:
     driver: bridge
-

@@ -25,6 +25,8 @@ CMD ["pnpm", "dev", "--host"]
 
 # Production build stage
 FROM base AS build
+ARG VITE_API_URL
+ENV VITE_API_URL=${VITE_API_URL}
 RUN pnpm build
 
 # Production stage
