@@ -29,6 +29,8 @@ import { CreateReportDto } from './dto/create-report.dto';
 import { UpdateReportDto } from './dto/update-report.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Roles } from '@/auth/decorators/roles.decorator';
+import { Role } from '@prisma/client';
 
 @Controller('projects')
 @UseGuards(JwtAuthGuard)
@@ -55,6 +57,7 @@ export class ProjectsController {
 
   // Project Tags
   @Post(':id/tags')
+  @Roles(Role.ADMIN, Role.MANAGER)
   async updateTags(
     @CurrentUser() user: any,
     @Param('id') id: string,
