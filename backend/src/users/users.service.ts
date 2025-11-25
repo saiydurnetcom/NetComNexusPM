@@ -52,8 +52,18 @@ export class UsersService {
 
   async create(createUserDto: CreateUserDto) {
     const { email, firstName, lastName } = createUserDto;
-    if (!email || !firstName || !lastName) {
+    const normalizedEmail = email?.trim().toLowerCase();
+    if (!normalizedEmail || !firstName || !lastName) {
       throw new BadRequestException('email, firstName and lastName are required');
+    }
+
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: normalizedEmail },
+      select: { id: true },
+    });
+
+    if (existingUser) {
+      throw new BadRequestException('User with this email already exists');
     }
 
     // Normalize role: fallback to MEMBER
@@ -71,7 +81,7 @@ export class UsersService {
 
     const user = await this.prisma.user.create({
       data: {
-        email: createUserDto.email,
+        email: normalizedEmail,
         password: hashedPassword,
         firstName: createUserDto.firstName,
         lastName: createUserDto.lastName,

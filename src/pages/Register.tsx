@@ -35,10 +35,11 @@ export default function Register() {
     setIsLoading(true);
 
     try {
+      const normalizedEmail = formData.email.trim().toLowerCase();
       await register({
         firstName: formData.firstName,
         lastName: formData.lastName,
-        email: formData.email,
+        email: normalizedEmail,
         password: formData.password,
       });
       toast({
@@ -58,9 +59,10 @@ export default function Register() {
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [e.target.name]: e.target.value,
+      [name]: name === 'email' ? value.trim().toLowerCase() : value,
     }));
   };
 

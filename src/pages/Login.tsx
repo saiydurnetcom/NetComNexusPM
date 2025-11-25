@@ -20,7 +20,8 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      await login(email, password);
+      const normalizedEmail = email.trim().toLowerCase();
+      await login(normalizedEmail, password);
       toast({
         title: 'Success',
         description: 'Logged in successfully!',
@@ -53,7 +54,7 @@ export default function Login() {
             type="email"
             placeholder="Enter your email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => setEmail(e.target.value.toLowerCase())}
             required
           />
         </div>

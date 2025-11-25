@@ -19,7 +19,8 @@ export const adminService = {
     teamId?: string;
     departmentId?: string;
   }): Promise<User> {
-    const created = await apiClient.createUser(data);
+    const normalizedEmail = data.email.trim().toLowerCase();
+    const created = await apiClient.createUser({ ...data, email: normalizedEmail });
     return created as User;
   },
 
@@ -34,7 +35,7 @@ export const adminService = {
 
   async updateUser(id: string, updates: Partial<User> & { teamId?: string; departmentId?: string }): Promise<User> {
     const payload: Record<string, unknown> = {
-      email: updates.email,
+      email: updates.email ? updates.email.trim().toLowerCase() : undefined,
       firstName: updates.firstName,
       lastName: updates.lastName,
       role: updates.role,

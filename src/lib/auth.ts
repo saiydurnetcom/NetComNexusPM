@@ -28,7 +28,8 @@ class AuthService {
   }
 
   async login(email: string, password: string): Promise<AuthResponse> {
-    const response = await apiClient.login(email, password);
+    const normalizedEmail = email.trim().toLowerCase();
+    const response = await apiClient.login(normalizedEmail, password);
     
     const user: User = {
       id: response.user.id,
@@ -53,7 +54,8 @@ class AuthService {
     firstName: string;
     lastName: string;
   }): Promise<AuthResponse> {
-    const response = await apiClient.register(data);
+    const normalizedEmail = data.email.trim().toLowerCase();
+    const response = await apiClient.register({ ...data, email: normalizedEmail });
 
     const user: User = {
       id: response.user.id,

@@ -334,7 +334,8 @@ function UsersManagement() {
   };
 
   const handleSave = async () => {
-    if (!formData.firstName || !formData.lastName || !formData.email) {
+    const normalizedEmail = formData.email.trim().toLowerCase();
+    if (!formData.firstName || !formData.lastName || !normalizedEmail) {
       toast({
         title: 'Error',
         description: 'Please fill in all required fields',
@@ -345,7 +346,7 @@ function UsersManagement() {
 
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(formData.email)) {
+    if (!emailRegex.test(normalizedEmail)) {
       toast({
         title: 'Error',
         description: 'Please enter a valid email address',
@@ -358,6 +359,7 @@ function UsersManagement() {
       if (editingUser) {
         await adminService.updateUser(editingUser.id, {
           ...formData,
+          email: normalizedEmail,
           teamId: formData.teamId || null,
           departmentId: formData.departmentId || null,
         });
@@ -384,7 +386,7 @@ function UsersManagement() {
 
         // Create user via backend API
         await adminService.createUser({
-          email: formData.email,
+          email: normalizedEmail,
           firstName: formData.firstName,
           lastName: formData.lastName,
           password,
@@ -516,7 +518,7 @@ function UsersManagement() {
                           try {
                             setEditingUser(user);
                             setFormData({
-                              email: user.email,
+                              email: (user.email || '').toLowerCase(),
                               firstName: user.firstName,
                               lastName: user.lastName,
                               password: '',
@@ -579,7 +581,7 @@ function UsersManagement() {
                   id="email"
                   type="email"
                   value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value.trim().toLowerCase() })}
                 />
               </div>
               {!editingUser && (

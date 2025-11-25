@@ -165,9 +165,10 @@ class ApiClient {
 
   // Auth endpoints
   async login(email: string, password: string) {
+    const normalizedEmail = email.trim().toLowerCase();
     const response = await this.request<{ token: string; user: any }>('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email: normalizedEmail, password }),
     });
     this.setToken(response.token);
     return response;
@@ -179,9 +180,11 @@ class ApiClient {
     firstName: string;
     lastName: string;
   }) {
+    const normalizedEmail = data.email.trim().toLowerCase();
+    const payload = { ...data, email: normalizedEmail };
     const response = await this.request<{ token: string; user: any }>('/auth/register', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(payload),
     });
     this.setToken(response.token);
     return response;
@@ -209,9 +212,11 @@ class ApiClient {
     teamId?: string;
     departmentId?: string;
   }) {
+    const normalizedEmail = data.email.trim().toLowerCase();
+    const payload = { ...data, email: normalizedEmail };
     return this.request<any>('/users', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(payload),
     });
   }
 

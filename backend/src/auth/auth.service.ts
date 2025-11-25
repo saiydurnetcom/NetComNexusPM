@@ -16,10 +16,11 @@ export class AuthService {
 
   async register(registerDto: RegisterDto) {
     const { email, password, firstName, lastName } = registerDto;
+    const normalizedEmail = email.trim().toLowerCase();
 
     // Check if user already exists
     const existingUser = await this.prisma.user.findUnique({
-      where: { email },
+      where: { email: normalizedEmail },
     });
 
     if (existingUser) {
@@ -29,10 +30,11 @@ export class AuthService {
     // Check allowed domains if configured
     const allowedDomains = this.configService.get<string>('ALLOWED_DOMAINS');
     if (allowedDomains) {
-      const emailDomain = email.split('@')[1];
-      const domains = allowedDomains.split(',').map(d => d.trim());
-      if (!domains.includes(emailDomain)) {
-        throw new BadRequestException(`Registration is only allowed for domains: ${domains.join(', ')}`);
+      const emailDomain = normalizedEmail.split('@')[1];
+      const configuredDomains = allowedDomains.split(',').map(d => d.trim());
+      const normalizedDomains = configuredDomains.map(d => d.toLowerCase());
+      if (!normalizedDomains.includes(emailDomain)) {
+        throw new BadRequestException(`Registration is only allowed for domains: ${configuredDomains.join(', ')}`);
       }
     }
 
@@ -42,7 +44,7 @@ export class AuthService {
     // Create user
     const user = await this.prisma.user.create({
       data: {
-        email,
+        email: normalizedEmail,
         password: hashedPassword,
         firstName,
         lastName,
@@ -76,10 +78,11 @@ export class AuthService {
 
   async login(loginDto: LoginDto) {
     const { email, password } = loginDto;
+    const normalizedEmail = email.trim().toLowerCase();
 
     // Find user
     const user = await this.prisma.user.findUnique({
-      where: { email },
+      where: { email: normalizedEmail },
     });
 
     if (!user || !user.isActive) {
