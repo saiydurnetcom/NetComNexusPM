@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import AppLayout from '@/components/AppLayout';
 import { useTasks } from '@/hooks/useTasks';
 import { useAuth } from '@/hooks/useAuth';
@@ -15,7 +15,8 @@ import {
   ArrowRight,
   Calendar,
   TrendingUp,
-  Zap
+  Zap,
+  Loader2
 } from 'lucide-react';
 import { format, isToday, isPast, parseISO } from 'date-fns';
 import { Task } from '@/types';
@@ -23,7 +24,7 @@ import { Task } from '@/types';
 export default function Today() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { tasks, fetchTasks } = useTasks();
+  const { tasks, fetchTasks, isLoading, error } = useTasks();
 
   useEffect(() => {
     fetchTasks();
@@ -44,12 +45,15 @@ export default function Today() {
   }, [tasks, user]);
 
   // Priority order: urgent > high > medium > low
-  const priorityOrder: Record<Task['priority'], number> = {
-    URGENT: 4,
-    HIGH: 3,
-    MEDIUM: 2,
-    LOW: 1,
-  };
+  const priorityOrder = useMemo<Record<Task['priority'], number>>(
+    () => ({
+      URGENT: 4,
+      HIGH: 3,
+      MEDIUM: 2,
+      LOW: 1,
+    }),
+    [],
+  );
 
   // Continue Working - Tasks in Progress, sorted by priority
   const continueWorkingTasks = useMemo(() => {
@@ -79,7 +83,7 @@ export default function Today() {
         const dueDate = parseISO(task.dueDate);
         return isPast(dueDate) && 
                !isToday(dueDate) && 
-               task.status !== 'completed';
+               task.status !== 'COMPLETED';
       })
       .sort((a, b) => {
         // Sort by how overdue (most overdue first), then by priority
@@ -89,6 +93,18 @@ export default function Today() {
           return bOverdue - aOverdue;
         }
         return priorityOrder[b.priority] - priorityOrder[a.priority];
+      });
+  }, [userTasks, priorityOrder]);
+
+  const todoTasks = useMemo(() => {
+    return userTasks
+      .filter(task => task.status === 'TODO')
+      .sort((a, b) => {
+        const byPriority = priorityOrder[b.priority] - priorityOrder[a.priority];
+        if (byPriority !== 0) return byPriority;
+        const aDate = a.dueDate ? parseISO(a.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
+        const bDate = b.dueDate ? parseISO(b.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
+        return aDate - bDate;
       });
   }, [userTasks, priorityOrder]);
 
@@ -135,6 +151,9 @@ export default function Today() {
             <div className="flex items-center gap-2 mb-2">
               {getStatusIcon(task.status)}
               <h3 className="font-semibold text-sm truncate">{task.title}</h3>
+              <Badge variant="outline" className="text-[10px] uppercase">
+                {task.status}
+              </Badge>
             </div>
             {task.description && (
               <p className="text-sm text-muted-foreground line-clamp-2 mb-2">
@@ -165,6 +184,34 @@ export default function Today() {
     </Card>
   );
 
+  const SectionLoader = ({ variant = 'default' }: { variant?: 'default' | 'overdue' }) => (
+    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+      {Array.from({ length: 3 }).map((_, index) => (
+        <Card
+          key={index}
+          className={variant === 'overdue' ? 'border-red-200 bg-red-50/50' : ''}
+        >
+          <CardContent className="p-4">
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <Skeleton className="h-4 w-4 rounded-full" />
+                <Skeleton className="h-4 w-2/3" />
+                <Skeleton className="h-4 w-12" />
+              </div>
+              <Skeleton className="h-3 w-full" />
+              <Skeleton className="h-3 w-4/5" />
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-5 w-20 rounded-full" />
+                <Skeleton className="h-5 w-16 rounded-full" />
+                <Skeleton className="h-4 w-24" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+
   return (
     <AppLayout>
       <div className="container mx-auto px-4 py-8 max-w-7xl">
@@ -175,17 +222,30 @@ export default function Today() {
           </p>
         </div>
 
+        {error && !isLoading && (
+          <Card className="border-destructive/40">
+            <CardContent className="py-6">
+              <div className="flex items-center gap-3 text-destructive">
+                <AlertCircle className="h-5 w-5" />
+                <span>{error}</span>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         <div className="grid gap-6">
           {/* Continue Working Section */}
           <div>
             <div className="flex items-center gap-2 mb-4">
               <TrendingUp className="h-5 w-5 text-blue-600" />
               <h2 className="text-xl font-semibold">Continue Working</h2>
-              <Badge variant="secondary" className="ml-2">
-                {continueWorkingTasks.length}
+              <Badge variant="secondary" className="ml-2 flex items-center gap-1">
+                {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : continueWorkingTasks.length}
               </Badge>
             </div>
-            {continueWorkingTasks.length === 0 ? (
+              {isLoading ? (
+                <SectionLoader />
+              ) : continueWorkingTasks.length === 0 ? (
               <Card>
                 <CardContent className="p-8 text-center">
                   <Play className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
@@ -204,16 +264,48 @@ export default function Today() {
             )}
           </div>
 
+          {/* To Do Section */}
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <Zap className="h-5 w-5 text-gray-600" />
+              <h2 className="text-xl font-semibold">To Do</h2>
+              <Badge variant="secondary" className="ml-2 flex items-center gap-1">
+                {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : todoTasks.length}
+              </Badge>
+            </div>
+            {isLoading ? (
+              <SectionLoader />
+            ) : todoTasks.length === 0 ? (
+              <Card>
+                <CardContent className="p-8 text-center">
+                  <Circle className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                  <p className="text-muted-foreground">No tasks in To Do</p>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Create or assign tasks to see them here
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                {todoTasks.map((task) => (
+                  <TaskCard key={task.id} task={task} />
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Due Today Section */}
           <div>
             <div className="flex items-center gap-2 mb-4">
               <Zap className="h-5 w-5 text-yellow-600" />
               <h2 className="text-xl font-semibold">Due Today</h2>
-              <Badge variant="secondary" className="ml-2">
-                {dueTodayTasks.length}
+              <Badge variant="secondary" className="ml-2 flex items-center gap-1">
+                {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : dueTodayTasks.length}
               </Badge>
             </div>
-            {dueTodayTasks.length === 0 ? (
+            {isLoading ? (
+              <SectionLoader />
+            ) : dueTodayTasks.length === 0 ? (
               <Card>
                 <CardContent className="p-8 text-center">
                   <Calendar className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
@@ -237,11 +329,13 @@ export default function Today() {
             <div className="flex items-center gap-2 mb-4">
               <AlertCircle className="h-5 w-5 text-red-600" />
               <h2 className="text-xl font-semibold">I Think You Missed These</h2>
-              <Badge variant="destructive" className="ml-2">
-                {overdueTasks.length}
+              <Badge variant="destructive" className="ml-2 flex items-center gap-1">
+                {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : overdueTasks.length}
               </Badge>
             </div>
-            {overdueTasks.length === 0 ? (
+            {isLoading ? (
+              <SectionLoader variant="overdue" />
+            ) : overdueTasks.length === 0 ? (
               <Card>
                 <CardContent className="p-8 text-center">
                   <CheckCircle2 className="h-12 w-12 mx-auto mb-4 text-green-600" />

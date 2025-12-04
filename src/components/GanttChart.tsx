@@ -159,7 +159,7 @@ export function GanttChart({ tasks, milestones = [], startDate, endDate, onTaskU
   };
 
   return (
-    <div className="w-full overflow-x-auto border rounded-lg">
+    <div className="w-full overflow-x-auto overflow-y-hidden border rounded-lg">
       <div className="min-w-full">
         {/* Header with week/month labels */}
         <div className="flex border-b border-gray-200 sticky top-0 bg-white z-20">

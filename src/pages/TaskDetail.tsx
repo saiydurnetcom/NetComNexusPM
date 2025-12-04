@@ -101,6 +101,7 @@ export default function TaskDetail() {
     if (id) {
       loadTask();
       fetchProjects();
+      fetchTasks();
       fetchTimeEntries();
       loadUsers();
       loadTags();

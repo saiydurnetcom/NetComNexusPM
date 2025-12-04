@@ -507,6 +507,44 @@ export default function ProjectDetail() {
     }
   };
 
+  const handleGenerateWeeklyReportForProject = async () => {
+    if (!id) return;
+
+    setIsGeneratingReport(true);
+    try {
+      const { generateWeeklyReport, saveReport } = await import('@/lib/reports-service');
+      const report = await generateWeeklyReport(id, {
+        projects: projects.filter(p => p.id === id),
+        tasks: projectTasks,
+        timeEntries: timeEntries.filter(entry => {
+          const task = projectTasks.find(t => t.id === entry.taskId);
+          return task !== undefined;
+        }),
+      });
+      setCxoReport(report);
+      setIsReportDialogOpen(true);
+
+      // Auto-save the weekly report as a summary
+      try {
+        await saveReport(id, report, 'summary', currentProject?.name);
+        toast({
+          title: 'Success',
+          description: 'Weekly report generated and saved successfully',
+        });
+      } catch (saveError) {
+        console.error('Error saving weekly report:', saveError);
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to generate weekly report',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  };
+
   const handleStopTimer = async () => {
     if (!activeTimer) return;
     try {
@@ -636,6 +674,19 @@ export default function ProjectDetail() {
                   <p className="text-gray-600">{currentProject.description || 'No description'}</p>
                 </div>
                 <div className="flex gap-2 items-center">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleGenerateWeeklyReportForProject}
+                    disabled={isGeneratingReport || !id}
+                    title="Generate Weekly Report"
+                  >
+                    {isGeneratingReport ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-4 w-4" />
+                    )}
+                  </Button>
                   <Button
                     variant="outline"
                     size="sm"
@@ -909,11 +960,11 @@ export default function ProjectDetail() {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="all">All Status</SelectItem>
-                            <SelectItem value="todo">To Do</SelectItem>
-                            <SelectItem value="in_progress">In Progress</SelectItem>
-                            <SelectItem value="review">Review</SelectItem>
-                            <SelectItem value="blocked">Blocked</SelectItem>
-                            <SelectItem value="completed">Completed</SelectItem>
+                            <SelectItem value="TODO">To Do</SelectItem>
+                            <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                            <SelectItem value="REVIEW">Review</SelectItem>
+                            <SelectItem value="BLOCKED">Blocked</SelectItem>
+                            <SelectItem value="COMPLETED">Completed</SelectItem>
                           </SelectContent>
                         </Select>
                         <Select value={priorityFilter} onValueChange={setPriorityFilter}>
@@ -1055,10 +1106,10 @@ export default function ProjectDetail() {
                                           <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                          <SelectItem value="todo">To Do</SelectItem>
-                                          <SelectItem value="in_progress">In Progress</SelectItem>
-                                          <SelectItem value="review">Review</SelectItem>
-                                          <SelectItem value="completed">Completed</SelectItem>
+                                          <SelectItem value="TODO">To Do</SelectItem>
+                                          <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                                          <SelectItem value="REVIEW">Review</SelectItem>
+                                          <SelectItem value="COMPLETED">Completed</SelectItem>
                                         </SelectContent>
                                       </Select>
                                     </TableCell>
@@ -1171,10 +1222,10 @@ export default function ProjectDetail() {
                                         <SelectValue />
                                       </SelectTrigger>
                                       <SelectContent>
-                                        <SelectItem value="todo">To Do</SelectItem>
-                                        <SelectItem value="in_progress">In Progress</SelectItem>
-                                        <SelectItem value="review">Review</SelectItem>
-                                        <SelectItem value="completed">Completed</SelectItem>
+                                        <SelectItem value="TODO">To Do</SelectItem>
+                                        <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                                        <SelectItem value="REVIEW">Review</SelectItem>
+                                        <SelectItem value="COMPLETED">Completed</SelectItem>
                                       </SelectContent>
                                     </Select>
                                   </div>

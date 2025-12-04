@@ -1,9 +1,12 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export interface User {
   id: string;
   email: string;
   firstName: string;
   lastName: string;
   role?: 'admin' | 'manager' | 'member';
+  teamId?: string;
+  departmentId?: string;
   isActive?: boolean;
   createdAt: string;
   updatedAt?: string;

@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { apiClient } from './api-client';
+import { deepseekService } from './deepseek';
 import { User, Team, Department, AllowedDomain, Tag } from '../types';
 
 export const adminService = {
@@ -183,6 +184,7 @@ export const adminService = {
 
   async updateSettings(settings: Record<string, unknown>): Promise<void> {
     await apiClient.updateSettings(settings);
+    await deepseekService.refreshConfig(true);
   },
 
   // Project Members

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,7 +30,7 @@ import {
   FileSpreadsheet
 } from 'lucide-react';
 import { format, subWeeks, subMonths, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachWeekOfInterval, eachMonthOfInterval } from 'date-fns';
-import { Chart, ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
+import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Pie, PieChart, Cell, Bar, BarChart, XAxis, YAxis, CartesianGrid, Legend, ResponsiveContainer, Line, LineChart } from 'recharts';
 import { adminService } from '@/lib/admin-service';
 import { Team, Department, User as UserType } from '@/types';
@@ -324,7 +325,7 @@ export default function Reports() {
       const weekStart = startOfWeek(subWeeks(now, i));
       const weekEnd = endOfWeek(subWeeks(now, i));
       const weekTasks = filteredTasks.filter(t => {
-        if (t.status !== 'completed' || !t.updatedAt) return false;
+        if (t.status !== 'COMPLETED' || !t.updatedAt) return false;
         const completedDate = new Date(t.updatedAt);
         return completedDate >= weekStart && completedDate <= weekEnd;
       });
@@ -347,7 +348,7 @@ export default function Reports() {
       const monthStart = startOfMonth(subMonths(now, i));
       const monthEnd = endOfMonth(subMonths(now, i));
       const monthTasks = filteredTasks.filter(t => {
-        if (t.status !== 'completed' || !t.updatedAt) return false;
+        if (t.status !== 'COMPLETED' || !t.updatedAt) return false;
         const completedDate = new Date(t.updatedAt);
         return completedDate >= monthStart && completedDate <= monthEnd;
       });
@@ -537,6 +538,7 @@ export default function Reports() {
         // Don't show error for save, just log it
       }
     } catch (error) {
+      console.error('Error generating weekly report:', error);
       toast({
         title: 'Error',
         description: error instanceof Error ? error.message : 'Failed to generate weekly report',
@@ -862,7 +864,7 @@ export default function Reports() {
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-lg">{project.name}</CardTitle>
-                      <Badge variant={project.status === 'active' ? 'default' : 'secondary'}>
+                      <Badge variant={project.status === 'ACTIVE' ? 'default' : 'secondary'}>
                         {project.status}
                       </Badge>
                     </div>
@@ -1060,9 +1062,9 @@ export default function Reports() {
                       <div key={status} className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <div className={`w-3 h-3 rounded-full ${status === 'completed' ? 'bg-green-500' :
-                              status === 'in_progress' ? 'bg-blue-500' :
-                                status === 'review' ? 'bg-yellow-500' :
-                                  'bg-gray-500'
+                            status === 'in_progress' ? 'bg-blue-500' :
+                              status === 'review' ? 'bg-yellow-500' :
+                                'bg-gray-500'
                             }`} />
                           <span className="text-sm capitalize">{status.replace('_', ' ')}</span>
                         </div>
@@ -1117,9 +1119,9 @@ export default function Reports() {
                       <div key={priority} className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <div className={`w-3 h-3 rounded-full ${priority === 'urgent' ? 'bg-red-500' :
-                              priority === 'high' ? 'bg-orange-500' :
-                                priority === 'medium' ? 'bg-yellow-500' :
-                                  'bg-gray-500'
+                            priority === 'high' ? 'bg-orange-500' :
+                              priority === 'medium' ? 'bg-yellow-500' :
+                                'bg-gray-500'
                             }`} />
                           <span className="text-sm capitalize">{priority}</span>
                         </div>

@@ -4,7 +4,7 @@ import { UpdateSettingsDto } from './dto/update-settings.dto';
 
 @Injectable()
 export class SettingsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async getSettings() {
     let settings = await this.prisma.setting.findUnique({
@@ -25,6 +25,9 @@ export class SettingsService {
   async getPublicSettings() {
     const settings = await this.getSettings();
     return {
+      aiApiKey: settings.aiApiKey || null,
+      aiApiUrl: settings.aiApiUrl || null,
+      aiModel: settings.aiModel || 'deepseek-reasoner',
       emailEnabled: !!settings.emailEnabled,
       pushEnabled: !!settings.pushEnabled,
       pushVapidPublicKey: settings.pushVapidPublicKey || null,

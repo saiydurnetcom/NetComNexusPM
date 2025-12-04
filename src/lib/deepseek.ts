@@ -1,35 +1,81 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { AISuggestion } from '../types';
+import { apiClient } from './api-client';
 
 // Type for suggestions returned from AI (without database-generated fields)
 type RawAISuggestion = Omit<AISuggestion, 'id' | 'meetingId' | 'reviewedBy' | 'reviewedAt' | 'rejectionReason' | 'createdAt'>;
 
 // AI Service Configuration
 // ⚠️ SECURITY: NEVER hardcode API keys in this file!
-// Always use environment variables: VITE_AI_API_KEY and VITE_AI_API_URL
-// 
-// For local development: Create a .env file (never commit it!)
-// For Vercel: Add environment variables in project settings
-//
-// Example .env file:
-// VITE_AI_API_KEY=sk-your-api-key-here
-// VITE_AI_API_URL=https://api.deepseek.com/v1/chat/completions
-//
-// Note: 
-// - DeepSeek Reasoner model: deepseek-reasoner (better for intent understanding)
-// - DeepSeek Chat model: deepseek-chat (conversational)
-// - Reasoner is recommended for task extraction as it better understands semantic similarity
+// Settings are now stored in the backend configuration table and fetched via the public settings endpoint.
+// Environment variables remain as a fallback for local development.
+
+const DEFAULT_AI_API_URL = 'https://api.deepseek.com/v1/chat/completions';
 
 // Access environment variables with proper typing
 const getEnv = (key: string): string | undefined => {
   return (import.meta as any).env[key];
 };
 
-const AI_API_KEY = getEnv('VITE_AI_API_KEY');
-// Default to DeepSeek API (user can override with VITE_AI_API_URL env var)
-// Note: DeepSeek uses /v1/chat/completions endpoint format
-const AI_API_URL = getEnv('VITE_AI_API_URL') || 'https://api.deepseek.com/v1/chat/completions';
-// Model can be overridden via env var (default: deepseek-reasoner for better intent understanding)
-const DEFAULT_MODEL = getEnv('VITE_AI_MODEL') || 'deepseek-reasoner';
+type LoadedAIConfig = {
+  apiKey?: string;
+  apiUrl: string;
+  model: string;
+};
+
+const pickString = (value?: string | null): string | undefined => {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+};
+
+const envConfig = (): LoadedAIConfig => ({
+  apiKey: pickString(getEnv('VITE_AI_API_KEY')),
+  apiUrl: pickString(getEnv('VITE_AI_API_URL')) || DEFAULT_AI_API_URL,
+  model: pickString(getEnv('VITE_AI_MODEL')) || 'deepseek-reasoner',
+});
+
+let cachedConfig: LoadedAIConfig | null = null;
+let configPromise: Promise<LoadedAIConfig> | null = null;
+
+const loadAIConfig = async (): Promise<LoadedAIConfig> => {
+  if (cachedConfig) {
+    return cachedConfig;
+  }
+
+  if (!configPromise) {
+    configPromise = (async () => {
+      const fallback = envConfig();
+      try {
+        const settings = await apiClient.getPublicSettings();
+        const config: LoadedAIConfig = {
+          apiKey: pickString(settings?.aiApiKey) || fallback.apiKey,
+          apiUrl: pickString(settings?.aiApiUrl) || fallback.apiUrl,
+          model: pickString(settings?.aiModel) || fallback.model,
+        };
+
+        logDebug('Loaded AI config from backend', {
+          hasApiKey: !!config.apiKey,
+          apiUrl: config.apiUrl,
+          model: config.model,
+        });
+
+        cachedConfig = config;
+        return config;
+      } catch (error) {
+        console.error('Failed to load AI config from backend, falling back to environment values.', error);
+        cachedConfig = fallback;
+        return fallback;
+      } finally {
+        configPromise = null;
+      }
+    })();
+  }
+
+  return configPromise;
+};
 
 // Debug logging (only in development)
 const DEBUG = (import.meta as any).env.DEV || (import.meta as any).env.MODE === 'development';
@@ -41,30 +87,28 @@ const logDebug = (...args: any[]) => {
 
 export const deepseekService = {
   async processMeetingNotes(
-    notes: string, 
-    projectId?: string, 
+    notes: string,
+    projectId?: string,
     existingTasks?: Array<{ title: string; description?: string }>
   ): Promise<RawAISuggestion[]> {
+    const { apiKey, apiUrl, model } = await loadAIConfig();
     // Check if API is configured
-    const hasApiKey = AI_API_KEY && AI_API_KEY.trim().length > 0;
-    const hasApiUrl = AI_API_URL && AI_API_URL.trim().length > 0;
-    
+    const hasApiKey = typeof apiKey === 'string' && apiKey.length > 0;
+    const hasApiUrl = typeof apiUrl === 'string' && apiUrl.length > 0;
+
     logDebug('API Configuration:', {
       hasApiKey,
       hasApiUrl,
-      apiUrl: hasApiUrl ? AI_API_URL : 'not set',
-      apiKeyPrefix: hasApiKey ? `${AI_API_KEY.substring(0, 7)}...` : 'not set',
+      apiUrl: hasApiUrl ? apiUrl : 'not set',
+      apiKeyPrefix: hasApiKey && apiKey ? `${apiKey.substring(0, 7)}...` : 'not set',
+      model,
     });
 
     // If API key is configured, use real API
     if (hasApiKey && hasApiUrl) {
       try {
         logDebug('Attempting to call DeepSeek API...');
-        
-        // Use reasoner model for better intent understanding and duplicate detection
-        // Reasoner models are better for single-shot tasks that require understanding intent
-        const model = DEFAULT_MODEL; // Default: deepseek-reasoner (can be overridden via VITE_AI_MODEL env var)
-        
+
         const systemPrompt = existingTasks && existingTasks.length > 0
           ? `You are an intelligent task extraction and refinement assistant. Your role is to:
 1. Extract actionable tasks from meeting notes
@@ -259,7 +303,7 @@ Format: {"suggestions": [{"originalText": "[exact quote from notes]", "suggested
           response_format: { type: 'json_object' },
         };
 
-        logDebug('Request URL:', AI_API_URL);
+        logDebug('Request URL:', apiUrl);
         logDebug('Request body (truncated):', {
           ...requestBody,
           messages: requestBody.messages.map(m => ({
@@ -268,11 +312,11 @@ Format: {"suggestions": [{"originalText": "[exact quote from notes]", "suggested
           })),
         });
 
-        const response = await fetch(AI_API_URL, {
+        const response = await fetch(apiUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${AI_API_KEY}`,
+            'Authorization': `Bearer ${apiKey}`,
           },
           body: JSON.stringify(requestBody),
         });
@@ -283,7 +327,7 @@ Format: {"suggestions": [{"originalText": "[exact quote from notes]", "suggested
           const errorText = await response.text();
           let errorMessage = `AI API error: ${response.status} ${response.statusText}`;
           let errorDetails: any = { status: response.status, statusText: response.statusText };
-          
+
           try {
             const errorData = JSON.parse(errorText);
             errorMessage = errorData.error?.message || errorData.error?.code || errorMessage;
@@ -291,20 +335,20 @@ Format: {"suggestions": [{"originalText": "[exact quote from notes]", "suggested
           } catch {
             errorDetails.rawError = errorText;
           }
-          
+
           console.error('AI API Error Details:', errorDetails);
           throw new Error(`${errorMessage} (Status: ${response.status}). Check your API key and URL configuration.`);
         }
 
         const data = await response.json();
-        logDebug('Response data received:', { 
+        logDebug('Response data received:', {
           hasChoices: !!data.choices,
           choicesCount: data.choices?.length || 0,
         });
-        
+
         const content = data.choices[0]?.message?.content || '{}';
         logDebug('Response content (first 200 chars):', content.substring(0, 200));
-        
+
         // Parse the JSON response
         let parsedContent: any;
         try {
@@ -347,7 +391,7 @@ Format: {"suggestions": [{"originalText": "[exact quote from notes]", "suggested
         suggestions = suggestions.map(s => {
           const taskTitle = s.suggestedTask || 'Review meeting notes';
           const originalText = s.originalText || notes.substring(0, 100);
-          
+
           // Generate intelligent description if not provided by AI
           // The description should explain WHAT, WHY, and HOW, not just copy originalText
           let intelligentDescription = s.suggestedDescription;
@@ -355,12 +399,12 @@ Format: {"suggestions": [{"originalText": "[exact quote from notes]", "suggested
             // Create an intelligent description based on the task title
             intelligentDescription = `This task involves ${taskTitle.toLowerCase()}. It is important for maintaining project momentum and ensuring all stakeholders are aligned. Approach this systematically by breaking it down into clear steps, gathering necessary resources, and setting appropriate milestones for tracking progress.`;
           }
-          
+
           return {
             originalText,
             suggestedTask: taskTitle,
             suggestedDescription: intelligentDescription,
-          confidenceScore: typeof s.confidenceScore === 'number' ? Math.max(0, Math.min(1, s.confidenceScore)) : 0.8,
+            confidenceScore: typeof s.confidenceScore === 'number' ? Math.max(0, Math.min(1, s.confidenceScore)) : 0.8,
           };
         });
 
@@ -382,10 +426,10 @@ Format: {"suggestions": [{"originalText": "[exact quote from notes]", "suggested
     } else {
       logDebug('API not configured, using mock suggestions');
       if (!hasApiKey) {
-        console.warn('VITE_AI_API_KEY is not set. Using mock suggestions.');
+        console.warn('AI API key is not configured in settings or environment. Using mock suggestions.');
       }
       if (!hasApiUrl) {
-        console.warn('VITE_AI_API_URL is not set. Using mock suggestions.');
+        console.warn('AI API URL is not configured in settings or environment. Using mock suggestions.');
       }
     }
 
@@ -426,5 +470,72 @@ Format: {"suggestions": [{"originalText": "[exact quote from notes]", "suggested
 
     // Mock refinement - in a real implementation, this would use AI to improve the description
     return description + ' This task requires careful attention to detail and should be completed with high priority.';
+  },
+
+  async refreshConfig(forceReload: boolean = false): Promise<void> {
+    cachedConfig = null;
+    if (forceReload) {
+      await loadAIConfig();
+    }
+  },
+
+  async generateReport(userPrompt: string, systemPrompt: string): Promise<string> {
+    const { apiKey, apiUrl, model } = await loadAIConfig();
+
+    const hasApiKey = typeof apiKey === 'string' && apiKey.length > 0;
+    const hasApiUrl = typeof apiUrl === 'string' && apiUrl.length > 0;
+
+    if (hasApiKey && hasApiUrl) {
+      try {
+        const requestBody = {
+          model: model,
+          messages: [
+            {
+              role: 'system',
+              content: systemPrompt,
+            },
+            {
+              role: 'user',
+              content: userPrompt,
+            },
+          ],
+          temperature: 0.3,
+          response_format: { type: 'text' },
+        };
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify(requestBody),
+        });
+        if (!response.ok) {
+          const errorText = await response.text();
+          let errorMessage = `AI API error: ${response.status} ${response.statusText}`;
+          let errorDetails: any = { status: response.status, statusText: response.statusText };
+          try {
+            const errorData = JSON.parse(errorText);
+            errorMessage = errorData.error?.message || errorData.error?.code || errorMessage;
+            errorDetails = { ...errorDetails, ...errorData };
+          } catch {
+            errorDetails.rawError = errorText;
+          }
+          console.error('AI API Error Details for report generation:', errorDetails);
+          throw new Error(`${errorMessage} (Status: ${response.status}). Check your API key and URL configuration.`);
+        }
+        const data = await response.json();
+        const content = data.choices[0]?.message?.content || '';
+        return content;
+      } catch (error) {
+        console.error('AI API error during report generation:', error);
+        throw error;
+      }
+    } else {
+      const missingConfigs = [];
+      if (!hasApiKey) missingConfigs.push('API key');
+      if (!hasApiUrl) missingConfigs.push('API URL');
+      throw new Error(`AI API is not properly configured (${missingConfigs.join(', ')} missing).`);
+    }
   }
 };
