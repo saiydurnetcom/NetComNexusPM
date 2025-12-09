@@ -372,5 +372,18 @@ export const notificationsService = {
   async deleteNotification(notificationId: string): Promise<void> {
     await apiClient.deleteNotification(notificationId);
   },
+
+  async triggerNotification(data: {
+    userId: string;
+    type: string;
+    title: string;
+    message: string;
+    relatedTaskId?: string;
+    relatedProjectId?: string;
+    relatedCommentId?: string;
+    metadata?: Record<string, any>;
+  }): Promise<void> {
+    await apiClient.triggerNotification(data);
+  },
 };
 

@@ -227,6 +227,31 @@ export interface NotificationPreferences {
   updatedAt: string;
 }
 
+export type NotificationType =
+  | 'TASK_ASSIGNED'
+  | 'TASK_DUE'
+  | 'TASK_OVERDUE'
+  | 'COMMENT'
+  | 'MENTION'
+  | 'MILESTONE'
+  | 'DEPENDENCY_BLOCKED'
+  | 'TASK_STATUS_CHANGED'
+  | 'PROJECT_UPDATED';
+
+export interface Notification {
+  id: string;
+  userId: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  relatedTaskId?: string | null;
+  relatedProjectId?: string | null;
+  relatedCommentId?: string | null;
+  read: boolean;
+  readAt?: string | null;
+  createdAt: string;
+}
+
 export interface ProjectRisk {
   id: string;
   projectId: string;
