@@ -559,6 +559,22 @@ class ApiClient {
     });
   }
 
+  async triggerNotification(data: {
+    userId: string;
+    type: string;
+    title: string;
+    message: string;
+    relatedTaskId?: string;
+    relatedProjectId?: string;
+    relatedCommentId?: string;
+    metadata?: Record<string, any>;
+  }) {
+    return this.request<any>('/notifications/trigger', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
   async getNotificationPreferences() {
     return this.request<any>('/notifications/preferences');
   }

@@ -14,6 +14,8 @@ import { UserNotificationPreferencesService } from './user-notification-preferen
 import { UpdateNotificationPreferencesDto } from './dto/update-notification-preferences.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { NotificationTriggerService } from './notification-trigger.service';
+import { TriggerNotificationDto } from './dto/trigger-notification.dto';
 
 @Controller('notifications')
 @UseGuards(JwtAuthGuard)
@@ -21,7 +23,8 @@ export class NotificationsController {
   constructor(
     private readonly notificationsService: NotificationsService,
     private readonly notificationPreferencesService: UserNotificationPreferencesService,
-  ) {}
+    private readonly notificationTriggerService: NotificationTriggerService,
+  ) { }
 
   @Get()
   findAll(@CurrentUser() user: any, @Query('unreadOnly') unreadOnly?: string) {
@@ -41,6 +44,11 @@ export class NotificationsController {
   @Delete(':id')
   remove(@CurrentUser() user: any, @Param('id') id: string) {
     return this.notificationsService.remove(user.id, id);
+  }
+
+  @Post('trigger')
+  triggerNotification(@Body() dto: TriggerNotificationDto) {
+    return this.notificationTriggerService.triggerNotification(dto);
   }
 
   @Get('preferences')

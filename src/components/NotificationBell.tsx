@@ -69,17 +69,19 @@ export function NotificationBell() {
   };
 
   const getNotificationIcon = (type: string) => {
-    switch (type) {
-      case 'task_assigned':
-      case 'task_due':
-      case 'task_overdue':
+    const normalized = typeof type === 'string' ? type.toUpperCase() : '';
+
+    switch (normalized) {
+      case 'TASK_ASSIGNED':
+      case 'TASK_DUE':
+      case 'TASK_OVERDUE':
         return '📋';
-      case 'comment':
-      case 'mention':
+      case 'COMMENT':
+      case 'MENTION':
         return '💬';
-      case 'milestone':
+      case 'MILESTONE':
         return '🎯';
-      case 'dependency_blocked':
+      case 'DEPENDENCY_BLOCKED':
         return '🔗';
       default:
         return '🔔';

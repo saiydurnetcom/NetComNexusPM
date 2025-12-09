@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Notification Trigger Service
  * 
@@ -11,9 +12,22 @@ import { pushNotificationService } from './push-notification-service';
 import { notificationsService } from './api-data';
 import { usersService } from './users-service';
 
+type NotificationTriggerType =
+  | 'TASK_ASSIGNED'
+  | 'TASK_DUE'
+  | 'TASK_OVERDUE'
+  | 'COMMENT'
+  | 'MENTION'
+  | 'MILESTONE'
+  | 'DEPENDENCY_BLOCKED'
+  | 'TASK_STATUS_CHANGED'
+  | 'PROJECT_UPDATED';
+
+type LegacyNotificationTriggerType = Lowercase<NotificationTriggerType>;
+
 export interface NotificationTriggerOptions {
   userId: string;
-  type: 'task_assigned' | 'task_due' | 'task_overdue' | 'comment' | 'mention' | 'milestone' | 'dependency_blocked' | 'task_status_changed' | 'project_updated';
+  type: NotificationTriggerType | LegacyNotificationTriggerType;
   title: string;
   message: string;
   relatedTaskId?: string;
@@ -22,46 +36,69 @@ export interface NotificationTriggerOptions {
   metadata?: Record<string, any>;
 }
 
+type NormalizedNotificationTriggerOptions = Omit<NotificationTriggerOptions, 'type'> & {
+  type: NotificationTriggerType;
+};
+
+const VALID_NOTIFICATION_TYPES: NotificationTriggerType[] = [
+  'TASK_ASSIGNED',
+  'TASK_DUE',
+  'TASK_OVERDUE',
+  'COMMENT',
+  'MENTION',
+  'MILESTONE',
+  'DEPENDENCY_BLOCKED',
+  'TASK_STATUS_CHANGED',
+  'PROJECT_UPDATED',
+];
+
+const VALID_NOTIFICATION_TYPE_SET = new Set<NotificationTriggerType>(VALID_NOTIFICATION_TYPES);
+
 class NotificationTriggerService {
   /**
    * Trigger a notification (in-app, email, and/or push)
    */
   async triggerNotification(options: NotificationTriggerOptions): Promise<void> {
     try {
+      const normalizedOptions: NormalizedNotificationTriggerOptions = {
+        ...options,
+        type: this.normalizeType(options.type),
+      };
+
       // Get user preferences
       const preferences = await notificationPreferencesService.getPreferences();
       if (!preferences) {
         // Create in-app notification only if preferences don't exist
-        await this.createInAppNotification(options);
+        await this.createInAppNotification(normalizedOptions);
         return;
       }
 
       // Get user details for email
       let userEmail: string | null = null;
       try {
-        const user = await usersService.getUser(options.userId);
+        const user = await usersService.getUser(normalizedOptions.userId);
         userEmail = user?.email || null;
       } catch (error) {
         console.error('[Notification Trigger] Failed to get user email:', error);
       }
 
       // Create in-app notification
-      await this.createInAppNotification(options);
+      await this.createInAppNotification(normalizedOptions);
 
       // Check if email notification should be sent
       const shouldSendEmail = preferences.emailNotifications && userEmail;
       if (shouldSendEmail) {
-        const emailEnabled = this.shouldSendEmailForType(options.type, preferences);
+        const emailEnabled = this.shouldSendEmailForType(normalizedOptions.type, preferences);
         if (emailEnabled) {
-          await this.sendEmailNotification(userEmail, options, preferences);
+          await this.sendEmailNotification(userEmail, normalizedOptions, preferences);
         }
       }
 
       // Check if push notification should be sent
       if (preferences.pushNotifications && preferences.pushSubscription) {
-        const pushEnabled = this.shouldSendPushForType(options.type, preferences);
+        const pushEnabled = this.shouldSendPushForType(normalizedOptions.type, preferences);
         if (pushEnabled) {
-          await this.sendPushNotification(options, preferences);
+          await this.sendPushNotification(normalizedOptions, preferences);
         }
       }
     } catch (error) {
@@ -73,11 +110,21 @@ class NotificationTriggerService {
   /**
    * Create in-app notification
    */
-  private async createInAppNotification(options: NotificationTriggerOptions): Promise<void> {
+  private async createInAppNotification(options: NormalizedNotificationTriggerOptions): Promise<void> {
     try {
-      // No client-side creation; rely on backend to generate notifications from actions
-      // Optionally, this could refresh the notifications list:
-      await notificationsService.getNotifications(false).catch(() => {});
+      await notificationsService.triggerNotification({
+        userId: options.userId,
+        type: options.type,
+        title: options.title,
+        message: options.message,
+        relatedTaskId: options.relatedTaskId,
+        relatedProjectId: options.relatedProjectId,
+        relatedCommentId: options.relatedCommentId,
+        metadata: options.metadata,
+      });
+
+      // Optionally refresh cached notifications after backend confirmation
+      await notificationsService.getNotifications(false).catch(() => { });
     } catch (error) {
       console.error('[Notification Trigger] Failed to create in-app notification:', error);
     }
@@ -88,12 +135,12 @@ class NotificationTriggerService {
    */
   private async sendEmailNotification(
     userEmail: string,
-    options: NotificationTriggerOptions,
+    options: NormalizedNotificationTriggerOptions,
     preferences: any
   ): Promise<void> {
     try {
       switch (options.type) {
-        case 'task_assigned':
+        case 'TASK_ASSIGNED':
           if (preferences.taskAssignments) {
             await emailService.sendTaskAssignmentEmail(
               userEmail,
@@ -103,8 +150,8 @@ class NotificationTriggerService {
             );
           }
           break;
-        case 'comment':
-        case 'mention':
+        case 'COMMENT':
+        case 'MENTION':
           if (preferences.taskAssignments) {
             await emailService.sendCommentEmail(
               userEmail,
@@ -115,7 +162,7 @@ class NotificationTriggerService {
             );
           }
           break;
-        case 'project_updated':
+        case 'PROJECT_UPDATED':
           if (preferences.projectUpdates) {
             await emailService.sendProjectUpdateEmail(
               userEmail,
@@ -142,7 +189,7 @@ class NotificationTriggerService {
    * Send push notification
    */
   private async sendPushNotification(
-    options: NotificationTriggerOptions,
+    options: NormalizedNotificationTriggerOptions,
     preferences: any
   ): Promise<void> {
     try {
@@ -171,19 +218,32 @@ class NotificationTriggerService {
   }
 
   /**
+   * Normalize incoming notification type values to the backend enum format
+   */
+  private normalizeType(type: NotificationTriggerOptions['type']): NotificationTriggerType {
+    const candidate = typeof type === 'string' ? type.toUpperCase() : '';
+    if (VALID_NOTIFICATION_TYPE_SET.has(candidate as NotificationTriggerType)) {
+      return candidate as NotificationTriggerType;
+    }
+
+    console.warn('[Notification Trigger] Unknown notification type received, defaulting to PROJECT_UPDATED:', type);
+    return 'PROJECT_UPDATED';
+  }
+
+  /**
    * Check if email should be sent for this notification type
    */
-  private shouldSendEmailForType(type: string, preferences: any): boolean {
+  private shouldSendEmailForType(type: NotificationTriggerType, preferences: any): boolean {
     switch (type) {
-      case 'task_assigned':
+      case 'TASK_ASSIGNED':
         return preferences.taskAssignments;
-      case 'comment':
-      case 'mention':
+      case 'COMMENT':
+      case 'MENTION':
         return preferences.taskAssignments;
-      case 'project_updated':
+      case 'PROJECT_UPDATED':
         return preferences.projectUpdates;
-      case 'task_due':
-      case 'task_overdue':
+      case 'TASK_DUE':
+      case 'TASK_OVERDUE':
         return preferences.taskAssignments;
       default:
         return preferences.emailNotifications;
@@ -193,7 +253,7 @@ class NotificationTriggerService {
   /**
    * Check if push should be sent for this notification type
    */
-  private shouldSendPushForType(type: string, preferences: any): boolean {
+  private shouldSendPushForType(type: NotificationTriggerType, preferences: any): boolean {
     // For push, we respect the same preferences as email
     return this.shouldSendEmailForType(type, preferences);
   }
