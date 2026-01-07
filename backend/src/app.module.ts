@@ -16,6 +16,7 @@ import { DepartmentsModule } from './departments/departments.module';
 import { TeamsModule } from './teams/teams.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { AllowedDomainsModule } from './allowed-domains/allowed-domains.module';
+import { MailModule } from './mail/mail.module';
 
 @Module({
   imports: [
@@ -38,7 +39,8 @@ import { AllowedDomainsModule } from './allowed-domains/allowed-domains.module';
     SettingsModule,
     AdminModule,
     AllowedDomainsModule,
+    MailModule
   ],
 })
-export class AppModule {}
+export class AppModule { }
 

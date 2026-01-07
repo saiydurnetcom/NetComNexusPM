@@ -7,11 +7,12 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { Role } from '@prisma/client';
 import { CreateUserDto } from './dto/create-user.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
 
 @Controller('users')
 @UseGuards(JwtAuthGuard)
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(private readonly usersService: UsersService) { }
 
   @Get()
   @UseGuards(RolesGuard)
@@ -25,6 +26,18 @@ export class UsersController {
   @Roles(Role.ADMIN)
   create(@Body() createUserDto: CreateUserDto) {
     return this.usersService.create(createUserDto);
+  }
+
+  @Post('reset-password')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN,)
+  resetPassword(@Body('email') email: string) {
+    return this.usersService.initiatePasswordReset(email);
+  }
+
+  @Post('forgot-password')
+  forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
+    return this.usersService.initiatePasswordForgot(forgotPasswordDto);
   }
 
   @Get('me')
