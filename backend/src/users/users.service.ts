@@ -5,6 +5,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import * as bcrypt from 'bcryptjs';
 import { Role } from '@prisma/client';
 import { MailService } from '@/mail/mail.service';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 
 @Injectable()
@@ -158,8 +159,8 @@ export class UsersService {
     return user?.role || 'MEMBER';
   }
 
-  async initiatePasswordForgot(forgotPasswordDto: ForgotPasswordDto) {
-    const { email, oldPassword, newPassword } = forgotPasswordDto;
+  async changePassword(changePasswordDto: ChangePasswordDto) {
+    const { email, oldPassword, newPassword } = changePasswordDto;
     const normalizedEmail = email?.trim().toLowerCase();
 
     if (!normalizedEmail || !oldPassword || !newPassword) {
@@ -187,6 +188,47 @@ export class UsersService {
     });
 
     return { message: 'Password updated successfully' };
+  }
+
+  async initiatePasswordForgot(payload: ForgotPasswordDto) {
+    const { email } = payload;
+    const normalizedEmail = email?.trim().toLowerCase();
+
+    if (!normalizedEmail) {
+      throw new BadRequestException('Email is required');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { email: normalizedEmail },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const tempPassword = Math.random().toString(36).slice(-12);
+    const hashedTempPassword = await bcrypt.hash(tempPassword, 10);
+    await this.prisma.user.update({
+      where: { email: normalizedEmail },
+      data: { password: hashedTempPassword },
+    });
+
+    await this.mailService.sendEmailThroughProvider(
+      { email: user.email, name: `${user.firstName} ${user.lastName}` },
+      {
+        subject: 'Password Reset Request',
+        html: `<p>Dear ${user.firstName},</p>
+               <p>Your password has been reset. Here is your temporary password:</p>
+                <ul>
+                  <li>Temporary Password: ${tempPassword}</li>
+                </ul>
+                <p>Please log in and change your password.</p>
+                <p>Best regards,<br/>The Team</p>`,
+        text: `Dear ${user.firstName},\n\nYour password has been reset. Here is your temporary password:\n\nTemporary Password: ${tempPassword}\n\nPlease log in and change your password.\n\nBest regards,\nThe Team`,
+      },
+      { metadata: { cc: [] } },
+    );
+    return { message: 'Temporary password has been sent to your email' };
   }
 
   async initiatePasswordReset(email: string) {
