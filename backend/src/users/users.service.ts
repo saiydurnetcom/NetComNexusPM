@@ -79,7 +79,7 @@ export class UsersService {
     const passwordToHash =
       createUserDto.password && createUserDto.password.length >= 6
         ? createUserDto.password
-        : Math.random().toString(36).slice(-12);
+        : Math.random().toString(36).slice(-6); // 6 character random password
     const hashedPassword = await bcrypt.hash(passwordToHash, 10);
 
     const user = await this.prisma.user.create({
