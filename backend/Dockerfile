@@ -1,8 +1,8 @@
 # Backend Dockerfile (NestJS)
 FROM node:20-alpine AS base
 
-# Install pnpm
-RUN npm install -g pnpm@8.10.0
+# Install pnpm (lockfile requires v9)
+RUN npm install -g pnpm@9.12.3
 
 WORKDIR /app
 
