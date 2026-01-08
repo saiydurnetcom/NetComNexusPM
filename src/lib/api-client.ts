@@ -228,6 +228,30 @@ class ApiClient {
     });
   }
 
+  async resetPassword(email: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+    return this.request<{ message: string }>('/users/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ email: normalizedEmail }),
+    });
+  }
+
+  async changePassword(data: { email: string; oldPassword: string; newPassword: string }) {
+    const normalizedEmail = data.email.trim().toLowerCase();
+    return this.request<{ message: string }>('/users/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ ...data, email: normalizedEmail }),
+    });
+  }
+
+  async forgotPassword(email: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+    return this.request<{ message: string }>('/users/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email: normalizedEmail }),
+    });
+  }
+
   // Projects
   async getProjects() {
     return this.request<any[]>('/projects');

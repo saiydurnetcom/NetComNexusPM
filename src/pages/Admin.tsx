@@ -541,6 +541,30 @@ function UsersManagement() {
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={async () => {
+                          if (!confirm(`Reset password for ${user.email}? A password reset link will be sent to their email.`)) return;
+                          try {
+                            await adminService.resetPassword(user.email);
+                            toast({
+                              title: 'Success',
+                              description: 'Password reset link sent to user email',
+                            });
+                          } catch (error) {
+                            console.error('Error resetting password:', error);
+                            toast({
+                              title: 'Error',
+                              description: error instanceof Error ? error.message : 'Failed to reset password',
+                              variant: 'destructive',
+                            });
+                          }
+                        }}
+                        title="Reset Password"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>

@@ -34,6 +34,14 @@ export default function Settings() {
     email: user?.email || '',
   });
 
+  // Password change settings
+  const [passwordData, setPasswordData] = useState({
+    oldPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+
   // Notification settings
   const [notifications, setNotifications] = useState({
     emailNotifications: true,
@@ -178,6 +186,67 @@ export default function Settings() {
       });
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!user) return;
+
+    // Validation
+    if (!passwordData.oldPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
+      toast({
+        title: 'Error',
+        description: 'Please fill in all password fields',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      toast({
+        title: 'Error',
+        description: 'New passwords do not match',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (passwordData.newPassword.length < 6) {
+      toast({
+        title: 'Error',
+        description: 'New password must be at least 6 characters long',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      await apiClient.changePassword({
+        email: user.email,
+        oldPassword: passwordData.oldPassword,
+        newPassword: passwordData.newPassword,
+      });
+
+      // Clear password fields
+      setPasswordData({
+        oldPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+      });
+
+      toast({
+        title: 'Success',
+        description: 'Password changed successfully',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to change password',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsChangingPassword(false);
     }
   };
 
@@ -377,18 +446,47 @@ export default function Settings() {
                 <CardDescription>Manage your account security settings</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2">
+                <div className="space-y-4">
                   <Label>Change Password</Label>
                   <p className="text-sm text-muted-foreground">
-                    To change your password, please use the "Forgot Password" option on the login page.
+                    Update your password to keep your account secure
                   </p>
-                  <Button variant="outline" onClick={() => {
-                    toast({
-                      title: 'Info',
-                      description: 'Please use the "Forgot Password" link on the login page to reset your password.',
-                    });
-                  }}>
-                    Reset Password
+                  <div className="space-y-2">
+                    <Label htmlFor="oldPassword">Current Password</Label>
+                    <Input
+                      id="oldPassword"
+                      type="password"
+                      value={passwordData.oldPassword}
+                      onChange={(e) => setPasswordData({ ...passwordData, oldPassword: e.target.value })}
+                      placeholder="Enter current password"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="newPassword">New Password</Label>
+                    <Input
+                      id="newPassword"
+                      type="password"
+                      value={passwordData.newPassword}
+                      onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                      placeholder="Enter new password"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                    <Input
+                      id="confirmPassword"
+                      type="password"
+                      value={passwordData.confirmPassword}
+                      onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                      placeholder="Confirm new password"
+                    />
+                  </div>
+                  <Button
+                    onClick={handleChangePassword}
+                    disabled={isChangingPassword}
+                  >
+                    <Shield className="h-4 w-4 mr-2" />
+                    {isChangingPassword ? 'Changing Password...' : 'Change Password'}
                   </Button>
                 </div>
                 <Separator />

@@ -59,6 +59,10 @@ export const adminService = {
     return;
   },
 
+  async resetPassword(email: string): Promise<void> {
+    await apiClient.resetPassword(email);
+  },
+
   // Teams
   async getTeams(): Promise<Team[]> {
     const teams = await apiClient.getTeams();
